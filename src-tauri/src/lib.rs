@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex};
 
 use error::{AppError, AppResult};
 use netlab::{
-    DnsBenchmarkEntry, MtuDiscoveryResult, NicDriverProperty, QosGamePolicy, RouteProbeResult,
-    RouteTraceReport,
+    ActiveDnsStatus, ApplyDnsResult, DnsBenchmarkEntry, MtuDiscoveryResult, NicDriverProperty,
+    QosGamePolicy, RouteProbeResult, RouteTraceReport,
 };
 use scanner::benchmark::BenchmarkSnapshot;
 use scanner::SystemScanReport;
@@ -190,6 +190,13 @@ async fn trace_route_hops(target_host: String) -> AppResult<RouteTraceReport> {
 }
 
 #[tauri::command]
+async fn get_current_dns_status() -> AppResult<ActiveDnsStatus> {
+    tauri::async_runtime::spawn_blocking(netlab::get_current_dns_status)
+        .await
+        .map_err(|e| AppError::InvalidOperation(format!("Falha ao consultar DNS ativo: {e}")))?
+}
+
+#[tauri::command]
 async fn run_multi_dns_benchmark() -> AppResult<Vec<DnsBenchmarkEntry>> {
     tauri::async_runtime::spawn_blocking(netlab::run_multi_dns_benchmark)
         .await
@@ -202,7 +209,7 @@ async fn apply_custom_dns_provider(
     primary_ip: String,
     secondary_ip: String,
     provider_name: String,
-) -> AppResult<String> {
+) -> AppResult<ApplyDnsResult> {
     let op_lock = Arc::clone(&lock.0);
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = op_lock.try_lock().map_err(|_| {
@@ -355,6 +362,7 @@ pub fn run() {
             set_startup_item_enabled,
             probe_game_routes,
             trace_route_hops,
+            get_current_dns_status,
             run_multi_dns_benchmark,
             apply_custom_dns_provider,
             discover_optimal_mtu,

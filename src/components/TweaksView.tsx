@@ -22,7 +22,11 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { localizeTweak, REBOOT_REQUIRED_TWEAK_IDS } from "../i18n";
+import {
+  localizeTweak,
+  localizeTweakTitle,
+  REBOOT_REQUIRED_TWEAK_IDS,
+} from "../i18n";
 import type {
   AppError,
   AppLocale,
@@ -246,6 +250,7 @@ export const TweaksView = memo(function TweaksView({
     });
   }, [localizedItems, categoryFilter, riskFilter, searchQuery]);
 
+  const isPt = locale === "pt";
   const isAdmin = privilege?.isAdmin ?? false;
   const canApply = isAdmin && selectedIds.length > 0 && !busy;
   const canRevertAll = isAdmin && activeBackupSessions.length > 0 && !busy;
@@ -260,13 +265,16 @@ export const TweaksView = memo(function TweaksView({
   };
 
   const handleSelectCompetitiveSafe = () => {
-    selectPresetByIds(COMPETITIVE_SAFE_PRESET_IDS, "Preset Competitivo (Seguro)");
+    selectPresetByIds(
+      COMPETITIVE_SAFE_PRESET_IDS,
+      isPt ? "Preset Competitivo (Seguro)" : "Competitive Preset (Safe)"
+    );
   };
 
   const handleSelectMinLatency = () => {
     selectPresetByIds(
       [...COMPETITIVE_SAFE_PRESET_IDS, ...MIN_LATENCY_EXTRA_IDS],
-      "Preset Latência Mínima"
+      isPt ? "Preset Latência Mínima" : "Minimum Latency Preset"
     );
   };
 
@@ -281,7 +289,11 @@ export const TweaksView = memo(function TweaksView({
       )
       .map((item) => item.id);
     onSetSelected(secIds);
-    onSessionLabelChange("Hardening Segurança (CIS/Baseline)");
+    onSessionLabelChange(
+      isPt
+        ? "Hardening Segurança (CIS/Baseline)"
+        : "Security Hardening (CIS/Baseline)"
+    );
   };
 
   const handleApply = () => {
@@ -338,12 +350,16 @@ export const TweaksView = memo(function TweaksView({
       {privilege && !privilege.isAdmin && (
         <Alert variant="warning">
           <ShieldAlert className="size-4" aria-hidden="true" />
-          <AlertTitle>Sessão sem privilégios de Administrador</AlertTitle>
+          <AlertTitle>
+            {isPt
+              ? "Sessão sem privilégios de Administrador"
+              : "Session without Administrator privileges"}
+          </AlertTitle>
           <AlertDescription className="flex w-full flex-wrap items-center justify-between gap-3">
             <span className="max-w-2xl text-xs">
-              Você pode inspecionar chaves e montar presets livremente, mas o
-              backend Rust exige elevação UAC para gravar no Registro, Serviços,
-              TCP/IP ou Energia.
+              {isPt
+                ? "Você pode inspecionar chaves e montar presets livremente, mas o backend Rust exige elevação UAC para gravar no Registro, Serviços, TCP/IP ou Energia."
+                : "You can inspect keys and build presets freely, but the Rust backend requires UAC elevation to modify Registry keys, Services, TCP/IP, or Power settings."}
             </span>
             <Button
               type="button"
@@ -352,7 +368,13 @@ export const TweaksView = memo(function TweaksView({
               disabled={elevating}
               onClick={onRequestElevation}
             >
-              {elevating ? "Aguardando UAC..." : "Reiniciar como Administrador"}
+              {elevating
+                ? isPt
+                  ? "Aguardando UAC..."
+                  : "Waiting for UAC..."
+                : isPt
+                  ? "Reiniciar como Administrador"
+                  : "Restart as Administrator"}
             </Button>
           </AlertDescription>
         </Alert>
@@ -370,7 +392,11 @@ export const TweaksView = memo(function TweaksView({
                 disabled={busy}
               >
                 <Sparkles className="size-3.5" aria-hidden="true" />
-                <span>Preset Competitivo (Seguro)</span>
+                <span>
+                  {isPt
+                    ? "Preset Competitivo (Seguro)"
+                    : "Competitive Preset (Safe)"}
+                </span>
               </Button>
 
               <Button
@@ -381,7 +407,7 @@ export const TweaksView = memo(function TweaksView({
                 disabled={busy}
               >
                 <Gauge className="size-3.5" aria-hidden="true" />
-                <span>Latência Mínima</span>
+                <span>{isPt ? "Latência Mínima" : "Minimum Latency"}</span>
               </Button>
 
               <Button
@@ -392,7 +418,9 @@ export const TweaksView = memo(function TweaksView({
                 disabled={busy}
               >
                 <Shield className="size-3.5" aria-hidden="true" />
-                <span>Hardening Segurança</span>
+                <span>
+                  {isPt ? "Hardening Segurança" : "Security Hardening"}
+                </span>
               </Button>
             </div>
 
@@ -400,7 +428,9 @@ export const TweaksView = memo(function TweaksView({
               {confirmRevertAll ? (
                 <div className="inline-flex flex-wrap items-center gap-2 rounded-base border-2 border-border bg-chart-3 px-3 py-1.5 text-main-foreground">
                   <span className="font-heading text-xs font-bold">
-                    Reverter {activeBackupSessions.length} sessão(ões) ativa(s)?
+                    {isPt
+                      ? `Reverter ${activeBackupSessions.length} sessão(ões) ativa(s)?`
+                      : `Revert ${activeBackupSessions.length} active session(s)?`}
                   </span>
                   <Button
                     type="button"
@@ -409,7 +439,7 @@ export const TweaksView = memo(function TweaksView({
                     onClick={() => setConfirmRevertAll(false)}
                     disabled={busy}
                   >
-                    Cancelar
+                    {isPt ? "Cancelar" : "Cancel"}
                   </Button>
                   <Button
                     type="button"
@@ -418,7 +448,7 @@ export const TweaksView = memo(function TweaksView({
                     onClick={handleConfirmRevertAll}
                     disabled={!canRevertAll}
                   >
-                    Confirmar
+                    {isPt ? "Confirmar" : "Confirm"}
                   </Button>
                 </div>
               ) : (
@@ -430,15 +460,21 @@ export const TweaksView = memo(function TweaksView({
                   disabled={!canRevertAll}
                   title={
                     activeBackupSessions.length === 0
-                      ? "Nenhuma sessão de backup ativa para reverter"
+                      ? isPt
+                        ? "Nenhuma sessão de backup ativa para reverter"
+                        : "No active backup sessions to revert"
                       : !isAdmin
-                        ? "Requer execução como Administrador"
-                        : "Reverter todas as sessões de backup ativas em ordem inversa"
+                        ? isPt
+                          ? "Requer execução como Administrador"
+                          : "Requires Administrator privileges"
+                        : isPt
+                          ? "Reverter todas as sessões de backup ativas em ordem inversa"
+                          : "Revert all active backup sessions in reverse order"
                   }
                 >
                   <RotateCcw className="size-3.5" aria-hidden="true" />
                   <span>
-                    Reverter Tudo
+                    {isPt ? "Reverter Tudo" : "Revert All"}
                     {activeBackupSessions.length > 0
                       ? ` (${activeBackupSessions.length})`
                       : ""}
@@ -452,8 +488,16 @@ export const TweaksView = memo(function TweaksView({
                 size="icon-sm"
                 onClick={onRefresh}
                 disabled={loading || busy}
-                aria-label="Revalidar estado atual do sistema"
-                title="Revalidar estado atual do sistema"
+                aria-label={
+                  isPt
+                    ? "Revalidar estado atual do sistema"
+                    : "Revalidate current system state"
+                }
+                title={
+                  isPt
+                    ? "Revalidar estado atual do sistema"
+                    : "Revalidate current system state"
+                }
               >
                 <RefreshCw
                   className={`size-3.5 ${loading ? "animate-spin" : ""}`}
@@ -469,7 +513,7 @@ export const TweaksView = memo(function TweaksView({
                 variant={selectedIds.length > 0 ? "default" : "neutral"}
                 className="nb-mono"
               >
-                {selectedIds.length} selecionado(s)
+                {selectedIds.length} {isPt ? "selecionado(s)" : "selected"}
               </Badge>
               {selectedIds.length > 0 && (
                 <Button
@@ -479,7 +523,7 @@ export const TweaksView = memo(function TweaksView({
                   onClick={onClearSelection}
                   disabled={busy}
                 >
-                  Limpar seleção
+                  {isPt ? "Limpar seleção" : "Clear selection"}
                 </Button>
               )}
 
@@ -489,16 +533,20 @@ export const TweaksView = memo(function TweaksView({
                     checked={createRestorePoint}
                     disabled={busy}
                     onCheckedChange={onCreateRestorePointChange}
-                    aria-label="Criar Ponto de Restauração do Windows (VSS)"
+                    aria-label={
+                      isPt
+                        ? "Criar Ponto de Restauração do Windows (VSS)"
+                        : "Create Windows System Restore Point (VSS)"
+                    }
                   />
                   <span className="font-heading text-xs font-bold">
-                    {locale === "pt"
+                    {isPt
                       ? "Ponto de Restauração (VSS)"
                       : "Windows Restore Point (VSS)"}
                   </span>
                   {hasAdvancedOrSecuritySelected && (
                     <Badge variant="moderate">
-                      {locale === "pt" ? "Recomendado" : "Suggested"}
+                      {isPt ? "Recomendado" : "Suggested"}
                     </Badge>
                   )}
                 </div>
@@ -510,9 +558,17 @@ export const TweaksView = memo(function TweaksView({
                 type="text"
                 value={sessionLabel}
                 onChange={(e) => onSessionLabelChange(e.target.value)}
-                placeholder="Rótulo opcional do backup (ex: Perfil Competitivo)"
+                placeholder={
+                  isPt
+                    ? "Rótulo opcional do backup (ex: Perfil Competitivo)"
+                    : "Optional backup label (e.g. Competitive Profile)"
+                }
                 disabled={busy}
-                aria-label="Rótulo opcional do snapshot de backup"
+                aria-label={
+                  isPt
+                    ? "Rótulo opcional do snapshot de backup"
+                    : "Optional backup snapshot label"
+                }
                 className="h-9 w-72 text-xs"
               />
 
@@ -529,12 +585,16 @@ export const TweaksView = memo(function TweaksView({
                       className="size-3.5 animate-spin"
                       aria-hidden="true"
                     />
-                    <span>Executando...</span>
+                    <span>{isPt ? "Executando..." : "Applying..."}</span>
                   </>
                 ) : (
                   <>
                     <Rocket className="size-3.5" aria-hidden="true" />
-                    <span>Aplicar com backup ({selectedIds.length})</span>
+                    <span>
+                      {isPt
+                        ? `Aplicar com backup (${selectedIds.length})`
+                        : `Apply with backup (${selectedIds.length})`}
+                    </span>
                   </>
                 )}
               </Button>
@@ -558,7 +618,9 @@ export const TweaksView = memo(function TweaksView({
       {error && (
         <Alert variant="destructive">
           <AlertTriangle className="size-4" aria-hidden="true" />
-          <AlertTitle>Erro [{error.code}]</AlertTitle>
+          <AlertTitle>
+            {isPt ? "Erro" : "Error"} [{error.code}]
+          </AlertTitle>
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       )}
@@ -575,13 +637,25 @@ export const TweaksView = memo(function TweaksView({
             <AlertTriangle className="size-4" aria-hidden="true" />
           )}
           <AlertTitle>
-            {lastApplyResult.appliedIds.length} tweak(s) aplicados
-            {lastApplyResult.failures.length > 0
-              ? ` · ${lastApplyResult.failures.length} falha(s)`
-              : " com snapshot atômico salvo"}
-            {lastApplyResult.restorePointCreated
-              ? " + Ponto de Restauração VSS criado"
-              : ""}
+            {isPt
+              ? `${lastApplyResult.appliedIds.length} tweak(s) aplicados${
+                  lastApplyResult.failures.length > 0
+                    ? ` · ${lastApplyResult.failures.length} falha(s)`
+                    : " com snapshot atômico salvo"
+                }${
+                  lastApplyResult.restorePointCreated
+                    ? " + Ponto de Restauração VSS criado"
+                    : ""
+                }`
+              : `${lastApplyResult.appliedIds.length} tweak(s) applied${
+                  lastApplyResult.failures.length > 0
+                    ? ` · ${lastApplyResult.failures.length} failure(s)`
+                    : " with atomic snapshot saved"
+                }${
+                  lastApplyResult.restorePointCreated
+                    ? " + VSS Restore Point created"
+                    : ""
+                }`}
           </AlertTitle>
           <AlertDescription className="flex w-full flex-wrap items-start justify-between gap-3">
             <div className="space-y-1 text-xs">
@@ -599,7 +673,9 @@ export const TweaksView = memo(function TweaksView({
                 <ul className="mt-1.5 list-disc space-y-1 pl-4">
                   {lastApplyResult.failures.map((f) => (
                     <li key={f.tweakId}>
-                      <span className="font-bold">{f.tweakTitle}:</span>{" "}
+                      <span className="font-bold">
+                        {localizeTweakTitle(f.tweakId, f.tweakTitle, locale)}:
+                      </span>{" "}
                       {f.error}
                     </li>
                   ))}
@@ -619,7 +695,7 @@ export const TweaksView = memo(function TweaksView({
                   }
                 >
                   <History className="size-3.5" aria-hidden="true" />
-                  <span>Inspecionar backup</span>
+                  <span>{isPt ? "Inspecionar backup" : "Inspect backup"}</span>
                 </Button>
               )}
           </AlertDescription>
@@ -638,15 +714,21 @@ export const TweaksView = memo(function TweaksView({
             <AlertTriangle className="size-4" aria-hidden="true" />
           )}
           <AlertTitle>
-            Reversão concluída: {lastRevertResult.revertedCount} tweak(s)
-            restaurados ({lastRevertResult.sessionId})
+            {isPt
+              ? `Reversão concluída: ${lastRevertResult.revertedCount} tweak(s) restaurados (${lastRevertResult.sessionId})`
+              : `Rollback completed: ${lastRevertResult.revertedCount} tweak(s) restored (${lastRevertResult.sessionId
+                  .replace("sessões (interrompido)", "sessions (interrupted)")
+                  .replace("sessões", "sessions")})`}
           </AlertTitle>
           {lastRevertResult.failures.length > 0 && (
             <AlertDescription>
               <ul className="mt-1 list-disc space-y-1 pl-4 text-xs">
                 {lastRevertResult.failures.map((f) => (
                   <li key={f.tweakId}>
-                    <span className="font-bold">{f.tweakTitle}:</span> {f.error}
+                    <span className="font-bold">
+                      {localizeTweakTitle(f.tweakId, f.tweakTitle, locale)}:
+                    </span>{" "}
+                    {f.error}
                   </li>
                 ))}
               </ul>
@@ -665,15 +747,19 @@ export const TweaksView = memo(function TweaksView({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar tweak, chave do Registro, netsh, fsutil..."
-            aria-label="Buscar tweaks"
+            placeholder={
+              isPt
+                ? "Buscar tweak, chave do Registro, netsh, fsutil..."
+                : "Search tweak, Registry key, netsh, fsutil..."
+            }
+            aria-label={isPt ? "Buscar tweaks" : "Search tweaks"}
             className="h-10 pr-9 pl-9 text-xs"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              aria-label="Limpar busca"
+              aria-label={isPt ? "Limpar busca" : "Clear search"}
               className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer rounded p-0.5 text-foreground/65 hover:text-foreground"
             >
               <X className="size-4" />
@@ -688,7 +774,9 @@ export const TweaksView = memo(function TweaksView({
 
           <div
             role="group"
-            aria-label="Filtrar por nível de risco"
+            aria-label={
+              isPt ? "Filtrar por nível de risco" : "Filter by risk level"
+            }
             className="inline-flex flex-wrap items-center gap-1 rounded-base border-2 border-border bg-secondary-background p-1 shadow-shadow"
           >
             {riskTabs.map((tab) => {
@@ -715,7 +803,7 @@ export const TweaksView = memo(function TweaksView({
 
       <div
         role="group"
-        aria-label="Categorias de tweaks"
+        aria-label={isPt ? "Categorias de tweaks" : "Tweak categories"}
         className="flex flex-wrap items-center gap-1.5 rounded-base border-2 border-border bg-secondary-background p-1.5 shadow-shadow"
       >
         {categoryTabs.map((tab) => {
@@ -744,13 +832,17 @@ export const TweaksView = memo(function TweaksView({
       {loading && items.length === 0 ? (
         <Card>
           <CardContent className="nb-mono text-xs font-bold">
-            Lendo estado do Registro, Serviços, TCP/IP e Energia...
+            {isPt
+              ? "Lendo estado do Registro, Serviços, TCP/IP e Energia..."
+              : "Reading Registry, Services, TCP/IP, and Power state..."}
           </CardContent>
         </Card>
       ) : visibleItems.length === 0 ? (
         <Card>
           <CardContent className="py-6 text-center text-sm font-medium text-foreground/75">
-            Nenhum tweak encontrado para os filtros aplicados.
+            {isPt
+              ? "Nenhum tweak encontrado para os filtros aplicados."
+              : "No tweaks found for the active filters."}
           </CardContent>
         </Card>
       ) : (
@@ -783,7 +875,11 @@ export const TweaksView = memo(function TweaksView({
                         checked={isSelected}
                         disabled={busy || !item.applicable}
                         onCheckedChange={() => onToggleSelect(item.id)}
-                        aria-label={`Selecionar ${item.title}`}
+                        aria-label={
+                          isPt
+                            ? `Selecionar ${item.title}`
+                            : `Select ${item.title}`
+                        }
                       />
                     </div>
 
@@ -855,7 +951,7 @@ export const TweaksView = memo(function TweaksView({
 
                           <CollapsibleTrigger className="inline-flex shrink-0 items-center gap-1 rounded-base border-2 border-border bg-background px-2.5 py-1 text-xs font-heading font-bold transition-colors hover:bg-main hover:text-main-foreground">
                             <Terminal className="size-3.5" aria-hidden="true" />
-                            <span>Detalhes</span>
+                            <span>{isPt ? "Detalhes" : "Details"}</span>
                             <ChevronDown
                               className={`size-3.5 transition-transform duration-150 ${
                                 isExpanded ? "rotate-180" : ""
@@ -885,7 +981,9 @@ export const TweaksView = memo(function TweaksView({
                         )}
                         {!item.applicable && (
                           <Badge variant="moderate">
-                            Indisponível neste hardware/OS
+                            {isPt
+                              ? "Indisponível neste hardware/OS"
+                              : "Unavailable on this hardware/OS"}
                           </Badge>
                         )}
                       </div>
@@ -894,7 +992,9 @@ export const TweaksView = memo(function TweaksView({
                         <div className="mt-3 space-y-2.5 rounded-base border-2 border-border bg-background p-3.5 text-xs">
                           <div>
                             <div className="font-heading text-[11px] font-bold uppercase text-foreground/70">
-                              Chave do Registro / Comando / API Win32
+                              {isPt
+                                ? "Chave do Registro / Comando / API Win32"
+                                : "Registry Key / Command / Win32 API"}
                             </div>
                             <pre className="nb-mono mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded-base border-2 border-border bg-secondary-background p-2.5 text-[11px] leading-relaxed">
                               {item.technicalDetail}
@@ -903,7 +1003,9 @@ export const TweaksView = memo(function TweaksView({
 
                           <div>
                             <div className="font-heading text-[11px] font-bold uppercase text-foreground/70">
-                              Evidência técnica / Benchmark
+                              {isPt
+                                ? "Evidência técnica / Benchmark"
+                                : "Technical Evidence / Benchmark"}
                             </div>
                             <p className="mt-0.5 text-xs leading-relaxed text-foreground/85">
                               {item.benchmarkNote}
@@ -913,12 +1015,24 @@ export const TweaksView = memo(function TweaksView({
                           <div className="nb-mono flex flex-wrap gap-x-4 gap-y-1 border-t-2 border-border pt-2 text-[11px] text-foreground/75">
                             <span>ID: {item.id}</span>
                             <span>
-                              Privilégio:{" "}
-                              {item.requiresAdmin ? "Administrador" : "Usuário"}
+                              {isPt ? "Privilégio:" : "Privilege:"}{" "}
+                              {item.requiresAdmin
+                                ? isPt
+                                  ? "Administrador"
+                                  : "Administrator"
+                                : isPt
+                                  ? "Usuário"
+                                  : "Standard User"}
                             </span>
                             <span>
-                              Reversível:{" "}
-                              {item.reversible ? "Sim (Backup atômico)" : "Não"}
+                              {isPt ? "Reversível:" : "Reversible:"}{" "}
+                              {item.reversible
+                                ? isPt
+                                  ? "Sim (Backup atômico)"
+                                  : "Yes (Atomic backup)"
+                                : isPt
+                                  ? "Não"
+                                  : "No"}
                             </span>
                           </div>
                         </div>

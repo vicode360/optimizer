@@ -172,14 +172,14 @@ export function BenchmarkPanel({ locale }: BenchmarkPanelProps) {
                   <th className="px-4 py-2.5">
                     {copy.before}{" "}
                     <span className="nb-mono font-normal text-foreground/65">
-                      ({formatTimestamp(baseline.capturedAt)})
+                      ({formatTimestamp(baseline.capturedAt, locale)})
                     </span>
                   </th>
                   <th className="px-4 py-2.5">
                     {copy.after}{" "}
                     {current && (
                       <span className="nb-mono font-normal text-foreground/65">
-                        ({formatTimestamp(current.capturedAt)})
+                        ({formatTimestamp(current.capturedAt, locale)})
                       </span>
                     )}
                   </th>
@@ -330,7 +330,9 @@ export function BenchmarkPanel({ locale }: BenchmarkPanelProps) {
                   <td className="px-4 py-2.5 text-right">
                     {current &&
                     current.powerPlanName !== baseline.powerPlanName ? (
-                      <Badge variant="safe">Atualizado</Badge>
+                      <Badge variant="safe">
+                        {locale === "pt" ? "Atualizado" : "Updated"}
+                      </Badge>
                     ) : (
                       "—"
                     )}
@@ -354,7 +356,9 @@ export function BenchmarkPanel({ locale }: BenchmarkPanelProps) {
                     (current.tcpCongestionProvider !==
                       baseline.tcpCongestionProvider ||
                       current.tcpRsc !== baseline.tcpRsc) ? (
-                      <Badge variant="safe">Otimizado</Badge>
+                      <Badge variant="safe">
+                        {locale === "pt" ? "Otimizado" : "Optimized"}
+                      </Badge>
                     ) : (
                       "—"
                     )}

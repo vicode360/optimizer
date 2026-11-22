@@ -329,7 +329,12 @@ export function DiagnosticsView({
 
       <BenchmarkPanel locale={locale} />
 
-      <section aria-label="Achados do diagnóstico" className="space-y-3">
+      <section
+        aria-label={
+          locale === "pt" ? "Achados do diagnóstico" : "Diagnostic findings"
+        }
+        className="space-y-3"
+      >
         <div>
           <h2 className="font-heading text-base font-bold">
             {locale === "pt" ? "Análise do sistema" : "System Analysis"}

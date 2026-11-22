@@ -8,6 +8,7 @@ import {
   RotateCcw,
   ShieldCheck,
 } from "lucide-react";
+import { localizePrivilegeLabel, localizeTweakTitle } from "../i18n";
 import type {
   AppError,
   AppLocale,
@@ -68,6 +69,7 @@ export const BackupsView = memo(function BackupsView({
   onRequestElevation,
 }: BackupsViewProps) {
   const [confirmSessionId, setConfirmSessionId] = useState<string | null>(null);
+  const isPt = locale === "pt";
 
   const isAdmin = privilege?.isAdmin ?? false;
   const canRevertSelected =
@@ -108,7 +110,10 @@ export const BackupsView = memo(function BackupsView({
                     : "Every Registry, Service, Power Plan, TCP/IP, Startup, or NTFS mutation first persists its exact pre-mutation state to disk before modifying Windows."}
                 </p>
                 <div className="nb-mono mt-2.5 inline-block break-all rounded-base border-2 border-border bg-background px-3 py-1 text-xs font-bold">
-                  {directory ?? "Resolvendo %AppData%/optimizer/backups..."}
+                  {directory ??
+                    (isPt
+                      ? "Resolvendo %AppData%/optimizer/backups..."
+                      : "Resolving %AppData%/optimizer/backups...")}
                 </div>
               </div>
             </div>
@@ -124,7 +129,7 @@ export const BackupsView = memo(function BackupsView({
                 className={`size-3.5 ${loading ? "animate-spin" : ""}`}
                 aria-hidden="true"
               />
-              <span>{locale === "pt" ? "Atualizar lista" : "Refresh list"}</span>
+              <span>{isPt ? "Atualizar lista" : "Refresh list"}</span>
             </Button>
           </div>
 
@@ -135,14 +140,14 @@ export const BackupsView = memo(function BackupsView({
                 <span>
                   Token:{" "}
                   {privilegeLoading
-                    ? locale === "pt"
+                    ? isPt
                       ? "Verificando..."
                       : "Checking..."
-                    : (privilege?.elevationLabel ?? "Indisponível")}
+                    : localizePrivilegeLabel(privilege?.elevationLabel, locale)}
                 </span>
               </Badge>
               <Badge variant="neutral" className="nb-mono">
-                {locale === "pt" ? "Sessões gravadas" : "Saved sessions"}:{" "}
+                {isPt ? "Sessões gravadas" : "Saved sessions"}:{" "}
                 {sessions.length}
               </Badge>
             </div>
@@ -156,8 +161,12 @@ export const BackupsView = memo(function BackupsView({
                 onClick={onRequestElevation}
               >
                 {elevating
-                  ? "Aguardando UAC..."
-                  : "Reiniciar como Administrador"}
+                  ? isPt
+                    ? "Aguardando UAC..."
+                    : "Waiting for UAC..."
+                  : isPt
+                    ? "Reiniciar como Administrador"
+                    : "Restart as Administrator"}
               </Button>
             )}
           </div>
@@ -196,18 +205,27 @@ export const BackupsView = memo(function BackupsView({
             <AlertTriangle className="size-4" aria-hidden="true" />
           )}
           <AlertTitle>
-            {lastRevertResult.revertedCount} tweak(s) restaurados para o estado
-            original
-            {lastRevertResult.failures.length > 0
-              ? ` · ${lastRevertResult.failures.length} falha(s)`
-              : ""}
+            {isPt
+              ? `${lastRevertResult.revertedCount} tweak(s) restaurados para o estado original${
+                  lastRevertResult.failures.length > 0
+                    ? ` · ${lastRevertResult.failures.length} falha(s)`
+                    : ""
+                }`
+              : `${lastRevertResult.revertedCount} tweak(s) restored to original state${
+                  lastRevertResult.failures.length > 0
+                    ? ` · ${lastRevertResult.failures.length} failure(s)`
+                    : ""
+                }`}
           </AlertTitle>
           {lastRevertResult.failures.length > 0 && (
             <AlertDescription>
               <ul className="mt-1 list-disc space-y-1 pl-4 text-xs">
                 {lastRevertResult.failures.map((f) => (
                   <li key={f.tweakId}>
-                    <span className="font-bold">{f.tweakTitle}:</span> {f.error}
+                    <span className="font-bold">
+                      {localizeTweakTitle(f.tweakId, f.tweakTitle, locale)}:
+                    </span>{" "}
+                    {f.error}
                   </li>
                 ))}
               </ul>
@@ -219,7 +237,9 @@ export const BackupsView = memo(function BackupsView({
       {error && (
         <Alert variant="destructive">
           <AlertTriangle className="size-4" aria-hidden="true" />
-          <AlertTitle>Erro [{error.code}]</AlertTitle>
+          <AlertTitle>
+            {isPt ? "Erro" : "Error"} [{error.code}]
+          </AlertTitle>
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       )}
@@ -229,22 +249,25 @@ export const BackupsView = memo(function BackupsView({
           <div className="flex items-center gap-2 border-b-2 border-border bg-main/15 px-4 py-3">
             <History className="size-4" aria-hidden="true" />
             <span className="font-heading text-sm font-bold">
-              {locale === "pt" ? "Histórico de sessões" : "Session History"}
+              {isPt ? "Histórico de sessões" : "Session History"}
             </span>
           </div>
 
           {loading ? (
             <div className="p-5 text-xs text-foreground/75">
-              Carregando snapshots em disco...
+              {isPt
+                ? "Carregando snapshots em disco..."
+                : "Loading snapshots from disk..."}
             </div>
           ) : sessions.length === 0 ? (
             <div className="p-5">
               <div className="font-heading text-sm font-bold">
-                Nenhum snapshot gravado
+                {isPt ? "Nenhum snapshot gravado" : "No snapshots recorded"}
               </div>
               <p className="mt-1 text-xs leading-relaxed text-foreground/75">
-                Assim que você aplicar um lote em Tweaks, o estado original será
-                gravado automaticamente aqui para reversão segura.
+                {isPt
+                  ? "Assim que você aplicar um lote em Tweaks, o estado original será gravado automaticamente aqui para reversão segura."
+                  : "As soon as you apply a batch in Tweaks or NetLab, the original state is saved here automatically for safe rollback."}
               </p>
             </div>
           ) : (
@@ -268,11 +291,17 @@ export const BackupsView = memo(function BackupsView({
                         {session.label}
                       </span>
                       <Badge variant={session.restoredAt ? "safe" : "default"}>
-                        {session.restoredAt ? "Restaurado" : "Ativo"}
+                        {session.restoredAt
+                          ? isPt
+                            ? "Restaurado"
+                            : "Restored"
+                          : isPt
+                            ? "Ativo"
+                            : "Active"}
                       </Badge>
                     </div>
                     <div className="nb-mono flex items-center justify-between text-[11px] text-foreground/75">
-                      <span>{formatTimestamp(session.createdAt)}</span>
+                      <span>{formatTimestamp(session.createdAt, locale)}</span>
                       <span>
                         {session.tweakCount}{" "}
                         {session.tweakCount === 1 ? "tweak" : "tweaks"}
@@ -288,7 +317,7 @@ export const BackupsView = memo(function BackupsView({
         <Card className="lg:col-span-7">
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <CardTitle className="text-base">
-              {locale === "pt" ? "Inspetor de sessão" : "Session Inspector"}
+              {isPt ? "Inspetor de sessão" : "Session Inspector"}
             </CardTitle>
 
             {selectedSession && selectedSession.restoredAt === null && (
@@ -302,7 +331,7 @@ export const BackupsView = memo(function BackupsView({
                       onClick={() => setConfirmSessionId(null)}
                       disabled={busy}
                     >
-                      Cancelar
+                      {isPt ? "Cancelar" : "Cancel"}
                     </Button>
                     <Button
                       type="button"
@@ -312,7 +341,9 @@ export const BackupsView = memo(function BackupsView({
                       disabled={!canRevertSelected}
                     >
                       <RotateCcw className="size-3.5" aria-hidden="true" />
-                      <span>Confirmar reversão</span>
+                      <span>
+                        {isPt ? "Confirmar reversão" : "Confirm rollback"}
+                      </span>
                     </Button>
                   </>
                 ) : (
@@ -326,12 +357,16 @@ export const BackupsView = memo(function BackupsView({
                     disabled={!canRevertSelected}
                     title={
                       isAdmin
-                        ? "Restaurar todos os valores originais desta sessão"
-                        : "Requer execução como Administrador"
+                        ? isPt
+                          ? "Restaurar todos os valores originais desta sessão"
+                          : "Restore all original values from this session"
+                        : isPt
+                          ? "Requer execução como Administrador"
+                          : "Requires Administrator privileges"
                     }
                   >
                     <RotateCcw className="size-3.5" aria-hidden="true" />
-                    <span>Reverter sessão</span>
+                    <span>{isPt ? "Reverter sessão" : "Revert session"}</span>
                   </Button>
                 )}
               </div>
@@ -341,12 +376,15 @@ export const BackupsView = memo(function BackupsView({
           <CardContent>
             {loadingSession ? (
               <p className="text-xs text-foreground/75">
-                Lendo arquivo JSON do snapshot...
+                {isPt
+                  ? "Lendo arquivo JSON do snapshot..."
+                  : "Reading snapshot JSON file..."}
               </p>
             ) : !selectedSession ? (
               <p className="text-xs leading-relaxed text-foreground/75">
-                Selecione uma sessão na lista à esquerda para inspecionar chaves
-                de Registro, serviços e configurações originais preservadas.
+                {isPt
+                  ? "Selecione uma sessão na lista à esquerda para inspecionar chaves de Registro, serviços e configurações originais preservadas."
+                  : "Select a session on the left to inspect preserved Registry keys, services, and original system settings."}
               </p>
             ) : (
               <div className="space-y-4">
@@ -359,8 +397,8 @@ export const BackupsView = memo(function BackupsView({
                       <Badge variant="safe">
                         <CheckCircle2 className="size-3" aria-hidden="true" />
                         <span>
-                          Restaurado em{" "}
-                          {formatTimestamp(selectedSession.restoredAt)}
+                          {isPt ? "Restaurado em" : "Restored at"}{" "}
+                          {formatTimestamp(selectedSession.restoredAt, locale)}
                         </span>
                       </Badge>
                     )}
@@ -383,13 +421,19 @@ export const BackupsView = memo(function BackupsView({
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-heading text-xs font-bold">
-                              {entry.tweakTitle}
+                              {localizeTweakTitle(
+                                entry.tweakId,
+                                entry.tweakTitle,
+                                locale
+                              )}
                             </span>
                             <span className="nb-mono text-[11px] text-foreground/70">
                               {entry.tweakId}
                             </span>
                             {entryRestored && (
-                              <Badge variant="safe">Restaurado</Badge>
+                              <Badge variant="safe">
+                                {isPt ? "Restaurado" : "Restored"}
+                              </Badge>
                             )}
                           </div>
 
@@ -411,9 +455,7 @@ export const BackupsView = memo(function BackupsView({
                                 aria-hidden="true"
                               />
                               <span>
-                                {locale === "pt"
-                                  ? "Reverter item"
-                                  : "Revert item"}
+                                {isPt ? "Reverter item" : "Revert item"}
                               </span>
                             </Button>
                           )}
@@ -424,7 +466,7 @@ export const BackupsView = memo(function BackupsView({
                               key={idx}
                               className="nb-mono break-all rounded-base border-2 border-border bg-secondary-background px-2.5 py-1.5 text-[11px]"
                             >
-                              {describeTarget(target)}
+                              {describeTarget(target, locale)}
                             </li>
                           ))}
                         </ul>
@@ -442,11 +484,12 @@ export const BackupsView = memo(function BackupsView({
 });
 
 function describeOriginalRegistryValue(
-  original: RegistryOriginalValue
+  original: RegistryOriginalValue,
+  locale: AppLocale = "pt"
 ): string {
   switch (original.kind) {
     case "absent":
-      return "ausente";
+      return locale === "pt" ? "ausente" : "absent";
     case "dword":
       return `REG_DWORD(${original.value})`;
     case "qword":
@@ -462,20 +505,30 @@ function describeOriginalRegistryValue(
   }
 }
 
-export function describeTarget(target: BackupTarget): string {
+export function describeTarget(
+  target: BackupTarget,
+  locale: AppLocale = "pt"
+): string {
+  const isPt = locale === "pt";
   switch (target.targetType) {
     case "registryValue": {
       const hive = target.hive.toUpperCase();
-      return `${hive}\\${target.subkey} :: ${target.valueName} -> original: ${describeOriginalRegistryValue(target.original)}`;
+      return `${hive}\\${target.subkey} :: ${target.valueName} -> original: ${describeOriginalRegistryValue(target.original, locale)}`;
     }
     case "serviceStartType":
-      return `Serviço ${target.serviceName} -> startType=${target.originalStartType}, emExecução=${target.wasRunning}`;
+      return isPt
+        ? `Serviço ${target.serviceName} -> startType=${target.originalStartType}, emExecução=${target.wasRunning}`
+        : `Service ${target.serviceName} -> startType=${target.originalStartType}, wasRunning=${target.wasRunning}`;
     case "powerPlan":
-      return `Plano de energia -> ${target.originalSchemeName} (${target.originalSchemeGuid})`;
+      return isPt
+        ? `Plano de energia -> ${target.originalSchemeName} (${target.originalSchemeGuid})`
+        : `Power plan -> ${target.originalSchemeName} (${target.originalSchemeGuid})`;
     case "powerSettingValue":
       return `PowerCfg ${target.subgroupGuid}/${target.settingGuid} -> AC=${target.originalAcIndex}, DC=${target.originalDcIndex}`;
     case "hibernationState":
-      return `Hibernação -> original=${target.wasEnabled ? "ativada" : "desativada"}`;
+      return isPt
+        ? `Hibernação -> original=${target.wasEnabled ? "ativada" : "desativada"}`
+        : `Hibernation -> original=${target.wasEnabled ? "enabled" : "disabled"}`;
     case "fsutilBehavior":
       return `fsutil behavior ${target.key} -> original=${target.originalValue}`;
     case "netshTcpGlobal":
@@ -485,13 +538,19 @@ export function describeTarget(target: BackupTarget): string {
     case "netshSupplementalTcp":
       return `netsh int tcp supplemental (${target.template}) -> original=${target.originalProvider}`;
     case "netAdapterDns":
-      return `DNS ${target.interfaceAlias} -> dhcp=${target.wasDhcp}, servidores=[${target.originalServers.join(", ")}]`;
+      return isPt
+        ? `DNS ${target.interfaceAlias} -> dhcp=${target.wasDhcp}, servidores=[${target.originalServers.join(", ")}]`
+        : `DNS ${target.interfaceAlias} -> dhcp=${target.wasDhcp}, servers=[${target.originalServers.join(", ")}]`;
     case "scheduledTaskState":
-      return `Tarefa Agendada ${target.taskPath} -> original=${target.wasEnabled ? "ativada" : "desativada"}`;
+      return isPt
+        ? `Tarefa Agendada ${target.taskPath} -> original=${target.wasEnabled ? "ativada" : "desativada"}`
+        : `Scheduled Task ${target.taskPath} -> original=${target.wasEnabled ? "enabled" : "disabled"}`;
     case "netInterfaceMtu":
       return `MTU ${target.interfaceAlias} -> original=${target.originalMtu} bytes`;
     case "qosPolicy":
-      return `Política QoS DSCP 46 -> HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\QoS\\${target.policyName}`;
+      return isPt
+        ? `Política QoS DSCP 46 -> HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\QoS\\${target.policyName}`
+        : `QoS DSCP 46 Policy -> HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\QoS\\${target.policyName}`;
     case "snapshotNote":
       return `${target.description}: ${target.originalValue}`;
   }

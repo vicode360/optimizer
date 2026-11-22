@@ -67,53 +67,56 @@ export function CommandPalette({
 
   const actions: PaletteAction[] = useMemo(() => {
     const nav = UI_COPY[locale].nav;
+    const catNav = isPt ? "Navegação" : "Navigation";
+    const catSys = isPt ? "Sistema" : "System";
+    const catPref = isPt ? "Preferências" : "Preferences";
     const baseActions: PaletteAction[] = [
       {
         id: "nav_diagnostics",
         label: `${isPt ? "Ir para" : "Go to"}: ${nav.diagnostics}`,
-        category: "Navegação",
+        category: catNav,
         icon: Radar,
         onExecute: () => onNavigate("diagnostics"),
       },
       {
         id: "nav_netlab",
         label: `${isPt ? "Ir para" : "Go to"}: ${nav.netlab}`,
-        category: "Navegação",
+        category: catNav,
         icon: Radar,
         onExecute: () => onNavigate("netlab"),
       },
       {
         id: "nav_tweaks",
         label: `${isPt ? "Ir para" : "Go to"}: ${nav.tweaks}`,
-        category: "Navegação",
+        category: catNav,
         icon: SlidersHorizontal,
         onExecute: () => onNavigate("tweaks"),
       },
       {
         id: "nav_startup",
         label: `${isPt ? "Ir para" : "Go to"}: ${nav.startup}`,
-        category: "Navegação",
+        category: catNav,
         icon: SlidersHorizontal,
         onExecute: () => onNavigate("startup"),
       },
       {
         id: "nav_hardware",
         label: `${isPt ? "Ir para" : "Go to"}: ${nav.hardware}`,
-        category: "Navegação",
+        category: catNav,
         icon: Radar,
         onExecute: () => onNavigate("hardware"),
       },
       {
         id: "nav_telemetry",
         label: `${isPt ? "Ir para" : "Go to"}: ${nav.telemetry}`,
-        category: "Navegação",
+        category: catNav,
         icon: Radar,
         onExecute: () => onNavigate("telemetry"),
       },
       {
         id: "nav_backups",
         label: `${isPt ? "Ir para" : "Go to"}: ${nav.backups}`,
-        category: "Navegação",
+        category: catNav,
         icon: Radar,
         onExecute: () => onNavigate("backups"),
       },
@@ -122,7 +125,7 @@ export function CommandPalette({
         label: isPt
           ? "Verificar Atualizações no GitHub (Releases)"
           : "Check for GitHub Updates (Releases)",
-        category: "Sistema",
+        category: catSys,
         icon: Sparkles,
         onExecute: onOpenUpdates,
       },
@@ -131,7 +134,7 @@ export function CommandPalette({
         label: isPt
           ? "Exportar Laudo Técnico do Sistema (.md)"
           : "Export Technical System Audit Report (.md)",
-        category: "Sistema",
+        category: catSys,
         icon: FileDown,
         onExecute: onExportReport,
       },
@@ -140,7 +143,7 @@ export function CommandPalette({
         label: isPt
           ? "Reescanear Hardware e Diagnósticos"
           : "Rescan Hardware & Diagnostics",
-        category: "Sistema",
+        category: catSys,
         icon: RefreshCw,
         onExecute: onRunScan,
       },
@@ -149,7 +152,7 @@ export function CommandPalette({
         label: isPt
           ? `Alternar Tema (${theme === "light" ? "Ativar Escuro" : "Ativar Claro"})`
           : `Toggle Theme (${theme === "light" ? "Switch to Dark" : "Switch to Light"})`,
-        category: "Preferências",
+        category: catPref,
         icon: theme === "light" ? Moon : Sun,
         onExecute: onToggleTheme,
       },
@@ -158,7 +161,7 @@ export function CommandPalette({
         label: isPt
           ? "Mudar Idioma para Inglês (EN-US)"
           : "Switch Language to Portuguese (PT-BR)",
-        category: "Preferências",
+        category: catPref,
         icon: Languages,
         onExecute: onToggleLocale,
       },
@@ -227,7 +230,9 @@ export function CommandPalette({
                 ? "Digite um comando, aba ou tweak (ex: netlab, dscp, bbr2, dns, update)..."
                 : "Type a command, tab, or tweak (e.g. netlab, dscp, bbr2, dns, update)..."
             }
-            aria-label="Buscar comando rápido"
+            aria-label={
+              isPt ? "Buscar comando rápido" : "Search quick command"
+            }
             className="h-9 flex-1 text-xs"
           />
           <Button
@@ -235,7 +240,9 @@ export function CommandPalette({
             variant="neutral"
             size="icon-xs"
             onClick={onClose}
-            aria-label="Fechar Command Palette"
+            aria-label={
+              isPt ? "Fechar Command Palette" : "Close Command Palette"
+            }
           >
             <X className="size-4" aria-hidden="true" />
           </Button>

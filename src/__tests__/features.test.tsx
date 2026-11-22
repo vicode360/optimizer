@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BenchmarkPanel } from "../components/BenchmarkPanel";
 import { CommandPalette } from "../components/CommandPalette";
 import { NetLabView } from "../components/NetLabView";
+import { Sidebar } from "../components/Sidebar";
 import { StartupView } from "../components/StartupView";
+import { TopBar } from "../components/TopBar";
+import { TweaksView } from "../components/TweaksView";
 import { UpdateModal } from "../components/UpdateModal";
 import { localizeDiagnostic, localizeTweak } from "../i18n";
 import { tauriClient } from "../services/tauriClient";
@@ -24,6 +27,7 @@ vi.mock("../services/tauriClient", () => ({
     listNicDriverTweaks: vi.fn(),
     probeGameRoutes: vi.fn(),
     traceRouteHops: vi.fn(),
+    getCurrentDnsStatus: vi.fn(),
     runMultiDnsBenchmark: vi.fn(),
     applyCustomDnsProvider: vi.fn(),
     discoverOptimalMtu: vi.fn(),
@@ -44,6 +48,13 @@ describe("New features: i18n, BenchmarkPanel, StartupView, NetLabView, UpdateMod
     window.localStorage.clear();
     mockedClient.listQosPolicies.mockResolvedValue([]);
     mockedClient.listNicDriverTweaks.mockResolvedValue([]);
+    mockedClient.getCurrentDnsStatus.mockResolvedValue({
+      interfaceAlias: "Ethernet",
+      servers: ["192.168.1.1"],
+      isDhcp: true,
+      matchedProviderId: null,
+      matchedProviderName: null,
+    });
   });
 
   it("localizes tweaks and diagnostics between PT-BR and EN-US while preserving IDs", () => {
@@ -331,5 +342,153 @@ describe("New features: i18n, BenchmarkPanel, StartupView, NetLabView, UpdateMod
       screen.getByRole("button", { name: /Ir para: NetLab \(Ping & QoS\)/i })
     );
     expect(onNavigate).toHaveBeenCalledWith("netlab");
+  });
+
+  it("renders dynamic version in Sidebar, hides STREAM 1 HZ in TopBar, translates TweaksView drawer to EN, and updates NetLab Current DNS Applied + Applied button", async () => {
+    const user = userEvent.setup();
+
+    mockedClient.runMultiDnsBenchmark.mockResolvedValue([
+      {
+        providerId: "cloudflare",
+        providerName: "Cloudflare Anycast",
+        primaryIp: "1.1.1.1",
+        secondaryIp: "1.0.0.1",
+        avgMs: 7.2,
+        minMs: 6.9,
+        jitterMs: 0.3,
+        successRate: 100,
+      },
+    ]);
+
+    mockedClient.applyCustomDnsProvider.mockResolvedValue({
+      sessionId: "sess-dns-1",
+      currentDns: {
+        interfaceAlias: "Ethernet",
+        servers: ["1.1.1.1", "1.0.0.1"],
+        isDhcp: false,
+        matchedProviderId: "cloudflare",
+        matchedProviderName: "Cloudflare Anycast",
+      },
+    });
+
+    const sampleTweak: TweakItem = {
+      id: "network_disable_nic_power_saving",
+      title: "Desativar Economia NIC",
+      description: "Descrição PT",
+      technicalDetail: "HKLM\\... :: PnPCapabilities -> REG_DWORD=24 (0x18)",
+      benchmarkNote: "Nota PT",
+      category: "network",
+      impact: "high",
+      risk: "safe",
+      requiresAdmin: true,
+      reversible: true,
+      applied: true,
+      applicable: true,
+      hardwareNote: null,
+    };
+
+    render(
+      <>
+        <Sidebar
+          activeSection="netlab"
+          onSelectSection={vi.fn()}
+          locale="en"
+          privilege={{
+            isAdmin: true,
+            elevationLabel: "Administrador",
+            username: "tester",
+          }}
+          privilegeLoading={false}
+          elevating={false}
+          alertCount={0}
+          backupCount={0}
+          appliedTweaksCount={1}
+          totalTweaksCount={58}
+          telemetryConnected={true}
+          onRequestElevation={vi.fn()}
+        />
+        <TopBar
+          activeSection="netlab"
+          scannedAt="2026-11-22T12:00:00Z"
+          scanning={false}
+          onRunScan={vi.fn()}
+          theme="dark"
+          onToggleTheme={vi.fn()}
+          locale="en"
+          onToggleLocale={vi.fn()}
+        />
+        <TweaksView
+          items={[sampleTweak]}
+          selectedIds={[]}
+          sessionLabel=""
+          locale="en"
+          activeBackupSessions={[]}
+          loading={false}
+          busy={false}
+          progress={null}
+          lastApplyResult={null}
+          lastRevertResult={null}
+          error={null}
+          diagnostics={[]}
+          privilege={{
+            isAdmin: true,
+            elevationLabel: "Administrador",
+            username: "tester",
+          }}
+          onRefresh={vi.fn()}
+          onToggleSelect={vi.fn()}
+          onSetSelected={vi.fn()}
+          onSessionLabelChange={vi.fn()}
+          onClearSelection={vi.fn()}
+          onApplySelected={vi.fn()}
+          onRevertAllActive={vi.fn()}
+          onRequestElevation={vi.fn()}
+          onInspectBackupSession={vi.fn()}
+        />
+        <NetLabView
+          locale="en"
+          privilege={{
+            isAdmin: true,
+            elevationLabel: "Administrador",
+            username: "tester",
+          }}
+          elevating={false}
+          onRequestElevation={vi.fn()}
+          onMutationComplete={vi.fn()}
+        />
+      </>
+    );
+
+    // 1. Dynamic version in Sidebar & no STREAM 1 HZ in TopBar
+    expect(screen.getByText(/v0\.2\.1 · Windows/i)).toBeInTheDocument();
+    expect(screen.queryByText(/v0\.1\.0/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/STREAM 1 HZ/i)).not.toBeInTheDocument();
+
+    // 2. TweaksView English drawer
+    const detailsBtn = screen.getByRole("button", { name: /^Details$/i });
+    await user.click(detailsBtn);
+    expect(
+      screen.getByText("Registry Key / Command / Win32 API")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Technical Evidence / Benchmark")
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Privilege: Administrator/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Reversible: Yes \(Atomic backup\)/i)
+    ).toBeInTheDocument();
+
+    // 3. NetLab Current DNS Applied + Apply -> Applied transition
+    expect(await screen.findByText("Current DNS Applied")).toBeInTheDocument();
+    expect(screen.getByText("192.168.1.1")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Test 6 DNS/i }));
+    const applyBtn = await screen.findByRole("button", { name: /^Apply$/i });
+    await user.click(applyBtn);
+
+    expect(
+      await screen.findByRole("button", { name: /^Applied$/i })
+    ).toBeDisabled();
+    expect(screen.getByText("1.1.1.1 / 1.0.0.1")).toBeInTheDocument();
   });
 });

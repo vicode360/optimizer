@@ -185,7 +185,7 @@ export const StartupView = memo(function StartupView({
             <button
               type="button"
               onClick={() => setQuery("")}
-              aria-label="Limpar busca"
+              aria-label={locale === "pt" ? "Limpar busca" : "Clear search"}
               className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer rounded p-0.5 text-foreground/65 hover:text-foreground"
             >
               <X className="size-4" />
@@ -195,7 +195,11 @@ export const StartupView = memo(function StartupView({
 
         <div
           role="group"
-          aria-label="Filtro de origem de inicialização"
+          aria-label={
+            locale === "pt"
+              ? "Filtro de origem de inicialização"
+              : "Startup source filter"
+          }
           className="inline-flex flex-wrap items-center gap-1 rounded-base border-2 border-border bg-secondary-background p-1 shadow-shadow"
         >
           {(

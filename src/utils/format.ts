@@ -1,3 +1,5 @@
+import type { AppLocale } from "../types/system";
+
 export function formatBytes(bytes: number, decimals = 1): string {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return "0 B";
@@ -46,12 +48,15 @@ export function formatFrequencyMhz(mhz: number): string {
   return `${mhz} MHz`;
 }
 
-export function formatTimestamp(iso: string): string {
+export function formatTimestamp(
+  iso: string,
+  locale: AppLocale = "pt"
+): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return iso;
   }
-  return new Intl.DateTimeFormat("pt-BR", {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

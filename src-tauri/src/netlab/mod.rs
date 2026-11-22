@@ -10,8 +10,9 @@ use crate::security::admin::require_admin;
 use crate::security::backup::{self, BackupEntry, BackupTarget, RegistryHive};
 use crate::tweaks::registry::{apply_spec, nic_class_subkeys, try_read_original_value, RegistrySpec};
 use crate::tweaks::system_ops::{
-    apply_dns_servers, delete_qos_policy_subkey, query_active_dns_adapters_fast, run_hidden,
-    set_interface_mtu, snapshot_active_dns_targets,
+    apply_dns_servers, delete_qos_policy_subkey, query_active_dns_adapters,
+    query_active_dns_adapters_fast, run_hidden, set_interface_mtu, snapshot_active_dns_targets,
+    ActiveDnsAdapter,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -60,6 +61,23 @@ pub struct DnsBenchmarkEntry {
     pub min_ms: Option<f64>,
     pub jitter_ms: Option<f64>,
     pub success_rate: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveDnsStatus {
+    pub interface_alias: String,
+    pub servers: Vec<String>,
+    pub is_dhcp: bool,
+    pub matched_provider_id: Option<String>,
+    pub matched_provider_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyDnsResult {
+    pub session_id: String,
+    pub current_dns: ActiveDnsStatus,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -465,11 +483,67 @@ pub fn run_multi_dns_benchmark() -> AppResult<Vec<DnsBenchmarkEntry>> {
     Ok(entries)
 }
 
+pub fn match_dns_provider(primary_ip: Option<&str>) -> Option<(&'static str, &'static str)> {
+    let clean = primary_ip?.trim();
+    DNS_PROVIDERS
+        .iter()
+        .find(|(_, _, primary, _)| *primary == clean)
+        .map(|(id, name, _, _)| (*id, *name))
+}
+
+fn is_virtual_adapter_alias(alias: &str) -> bool {
+    let lower = alias.to_ascii_lowercase();
+    lower.contains("vethernet")
+        || lower.contains("wsl")
+        || lower.contains("virtualbox")
+        || lower.contains("vmware")
+        || lower.contains("loopback")
+        || lower.contains("tailscale")
+        || lower.contains("zerotier")
+}
+
+pub fn pick_primary_dns_adapter(adapters: &[ActiveDnsAdapter]) -> Option<ActiveDnsAdapter> {
+    adapters
+        .iter()
+        .find(|a| !is_virtual_adapter_alias(&a.interface_alias) && !a.server_addresses.is_empty())
+        .or_else(|| {
+            adapters
+                .iter()
+                .find(|a| !is_virtual_adapter_alias(&a.interface_alias))
+        })
+        .or_else(|| adapters.iter().find(|a| !a.server_addresses.is_empty()))
+        .or_else(|| adapters.first())
+        .cloned()
+}
+
+pub fn get_current_dns_status() -> AppResult<ActiveDnsStatus> {
+    let adapters = query_active_dns_adapters()
+        .ok()
+        .filter(|list| !list.is_empty())
+        .unwrap_or_else(query_active_dns_adapters_fast);
+
+    let chosen = pick_primary_dns_adapter(&adapters);
+    let (interface_alias, servers, is_dhcp) = match chosen {
+        Some(a) => (a.interface_alias, a.server_addresses, a.is_dhcp),
+        None => ("—".to_string(), Vec::new(), true),
+    };
+
+    let matched = match_dns_provider(servers.first().map(String::as_str));
+
+    Ok(ActiveDnsStatus {
+        interface_alias,
+        servers,
+        is_dhcp,
+        matched_provider_id: matched.map(|(id, _)| id.to_string()),
+        matched_provider_name: matched.map(|(_, name)| name.to_string()),
+    })
+}
+
 pub fn apply_custom_dns_provider(
     primary_ip: String,
     secondary_ip: String,
     provider_name: String,
-) -> AppResult<String> {
+) -> AppResult<ApplyDnsResult> {
     require_admin()?;
 
     let targets = snapshot_active_dns_targets()?;
@@ -491,7 +565,21 @@ pub fn apply_custom_dns_provider(
         vec![primary_ip.trim(), secondary_ip.trim()]
     };
     apply_dns_servers(&servers)?;
-    Ok(session.session_id)
+    let mut current_dns = get_current_dns_status()?;
+    if current_dns.servers.first().map(String::as_str) != Some(primary_ip.trim()) {
+        current_dns.servers = servers.iter().map(|s| (*s).to_string()).collect();
+        current_dns.is_dhcp = false;
+        let matched = match_dns_provider(Some(primary_ip.trim()));
+        current_dns.matched_provider_id = matched.map(|(id, _)| id.to_string());
+        current_dns.matched_provider_name = matched
+            .map(|(_, name)| name.to_string())
+            .or_else(|| Some(provider_name));
+    }
+
+    Ok(ApplyDnsResult {
+        session_id: session.session_id,
+        current_dns,
+    })
 }
 
 fn test_df_ping_payload(payload_size: u32) -> bool {
@@ -866,5 +954,29 @@ mod tests {
         assert_eq!(report.hops[1].stage, "isp");
         assert_eq!(report.hops[3].stage, "timeout");
         assert_eq!(report.bottleneck_hop, Some(3));
+    }
+
+    #[test]
+    fn matches_known_dns_provider_and_prefers_physical_adapter() {
+        assert_eq!(
+            match_dns_provider(Some("1.1.1.1")),
+            Some(("cloudflare", "Cloudflare Anycast"))
+        );
+        assert_eq!(match_dns_provider(Some("192.168.1.1")), None);
+
+        let picked = pick_primary_dns_adapter(&[
+            ActiveDnsAdapter {
+                interface_alias: "vEthernet (WSL)".into(),
+                server_addresses: vec!["172.25.0.1".into()],
+                is_dhcp: false,
+            },
+            ActiveDnsAdapter {
+                interface_alias: "Ethernet".into(),
+                server_addresses: vec!["8.8.8.8".into(), "8.8.4.4".into()],
+                is_dhcp: false,
+            },
+        ])
+        .expect("should pick physical adapter");
+        assert_eq!(picked.interface_alias, "Ethernet");
     }
 }

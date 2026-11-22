@@ -85,7 +85,7 @@ describe("BackupsView and target descriptions", () => {
       },
     ];
 
-    const descriptions = targets.map(describeTarget);
+    const descriptions = targets.map((t) => describeTarget(t));
     expect(descriptions[7]).toBe(
       "netsh int ipv4 global loopbacklargemtu -> original=enable"
     );
@@ -93,6 +93,9 @@ describe("BackupsView and target descriptions", () => {
     expect(descriptions[11]).toContain("MTU Ethernet -> original=1500");
     expect(descriptions[12]).toContain("Política QoS DSCP 46");
     expect(descriptions.every((d) => d.length > 0)).toBe(true);
+
+    expect(describeTarget(targets[10], "en")).toContain("Scheduled Task");
+    expect(describeTarget(targets[12], "en")).toContain("QoS DSCP 46 Policy");
   });
 
   it("requires 2-step confirmation before reverting an active backup session", async () => {

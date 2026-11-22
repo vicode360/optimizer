@@ -122,14 +122,14 @@ export const Sidebar = memo(function Sidebar({
               Optimizer
             </div>
             <div className="nb-mono mt-1 truncate text-[11px] text-foreground/65">
-              v0.1.0 · Windows
+              v{__APP_VERSION__} · Windows
             </div>
           </div>
         </div>
       </div>
 
       <nav
-        aria-label="Módulos do sistema"
+        aria-label={locale === "pt" ? "Módulos do sistema" : "System modules"}
         className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-3"
       >
         {navItems.map((item) => {

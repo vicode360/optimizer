@@ -99,7 +99,9 @@ export function UpdateModal({
             variant="neutral"
             size="icon-xs"
             onClick={onClose}
-            aria-label="Fechar modal de atualização"
+            aria-label={
+              isPt ? "Fechar modal de atualização" : "Close update modal"
+            }
           >
             <X className="size-4" aria-hidden="true" />
           </Button>

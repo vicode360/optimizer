@@ -10,7 +10,6 @@ import {
 import { UI_COPY } from "../i18n";
 import type { ActiveSection, AppLocale } from "../types/system";
 import { formatTimestamp } from "../utils/format";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 
 interface TopBarProps {
@@ -18,7 +17,6 @@ interface TopBarProps {
   scannedAt: string | null;
   scanning: boolean;
   onRunScan: () => void;
-  telemetryConnected: boolean;
   theme: "light" | "dark";
   onToggleTheme: () => void;
   locale: AppLocale;
@@ -34,7 +32,6 @@ export function TopBar({
   scannedAt,
   scanning,
   onRunScan,
-  telemetryConnected,
   theme,
   onToggleTheme,
   locale,
@@ -136,35 +133,14 @@ export function TopBar({
           </Button>
         )}
 
-        <Badge
-          variant={scanning ? "default" : telemetryConnected ? "safe" : "neutral"}
-          className="nb-mono hidden xl:inline-flex"
-        >
-          <span
-            className={`size-2 rounded-full border border-border ${
-              scanning
-                ? "animate-pulse bg-secondary-background"
-                : telemetryConnected
-                  ? "bg-border"
-                  : "bg-foreground/40"
-            }`}
-            aria-hidden="true"
-          />
-          <span>
-            {scanning
-              ? copy.scanning
-              : telemetryConnected
-                ? copy.stream1Hz
-                : copy.standby}
-          </span>
-        </Badge>
-
         {scannedAt && (
           <div className="hidden border-l-2 border-border pl-2.5 text-right lg:block">
             <div className="text-[10.5px] font-heading font-bold uppercase text-foreground/65">
               {copy.lastScan}
             </div>
-            <div className="nb-mono text-xs">{formatTimestamp(scannedAt)}</div>
+            <div className="nb-mono text-xs">
+              {formatTimestamp(scannedAt, locale)}
+            </div>
           </div>
         )}
 
@@ -173,7 +149,11 @@ export function TopBar({
           variant="neutral"
           size="xs"
           onClick={onToggleLocale}
-          aria-label="Alternar idioma PT / EN"
+          aria-label={
+            locale === "pt"
+              ? "Alternar idioma PT / EN"
+              : "Switch language PT / EN"
+          }
           title="PT-BR / EN-US"
           className="nb-mono"
         >
@@ -187,9 +167,23 @@ export function TopBar({
           size="icon-sm"
           onClick={onToggleTheme}
           aria-label={
-            theme === "light" ? "Ativar tema escuro" : "Ativar tema claro"
+            locale === "pt"
+              ? theme === "light"
+                ? "Ativar tema escuro"
+                : "Ativar tema claro"
+              : theme === "light"
+                ? "Switch to dark theme"
+                : "Switch to light theme"
           }
-          title={theme === "light" ? "Tema escuro" : "Tema claro"}
+          title={
+            locale === "pt"
+              ? theme === "light"
+                ? "Tema escuro"
+                : "Tema claro"
+              : theme === "light"
+                ? "Dark theme"
+                : "Light theme"
+          }
         >
           {theme === "light" ? (
             <Moon className="size-4" aria-hidden="true" />

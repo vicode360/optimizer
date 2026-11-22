@@ -315,6 +315,19 @@ export interface DnsBenchmarkEntry {
   successRate: number;
 }
 
+export interface ActiveDnsStatus {
+  interfaceAlias: string;
+  servers: string[];
+  isDhcp: boolean;
+  matchedProviderId: string | null;
+  matchedProviderName: string | null;
+}
+
+export interface ApplyDnsResult {
+  sessionId: string;
+  currentDns: ActiveDnsStatus;
+}
+
 export interface MtuDiscoveryResult {
   interfaceAlias: string;
   currentMtu: number;

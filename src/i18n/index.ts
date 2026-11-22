@@ -1,6 +1,7 @@
 import type {
   AppLocale,
   DiagnosticFinding,
+  NicDriverProperty,
   TweakItem,
 } from "../types/system";
 
@@ -463,15 +464,201 @@ export const REBOOT_REQUIRED_TWEAK_IDS = new Set([
   "security_disable_smbv1",
 ]);
 
+export function localizeHardwareNote(
+  note: string | null,
+  locale: AppLocale
+): string | null {
+  if (!note || locale === "pt") return note;
+
+  if (note.startsWith("Ação instantânea sob demanda")) {
+    return "Instant on-demand action (Windows repopulates cache naturally after purging).";
+  }
+
+  let match = note.match(
+    /^Valor calculado automaticamente: (\d+) KiB \(([\d.]+) GiB de RAM física\)\.$/
+  );
+  if (match) {
+    return `Auto-calculated value: ${match[1]} KiB (${match[2]} GiB physical RAM).`;
+  }
+
+  match = note.match(
+    /^(\d+) controlador\(es\) PCIe de vídeo detectado\(s\)\. Requer reinicialização após aplicar\.$/
+  );
+  if (match) {
+    return `${match[1]} PCIe display controller(s) detected. Reboot required after applying.`;
+  }
+
+  match = note.match(
+    /^(\d+) dispositivo\(s\) USB com EnhancedPowerManagementEnabled detectado\(s\)\.$/
+  );
+  if (match) {
+    return `${match[1]} USB device(s) with EnhancedPowerManagementEnabled detected.`;
+  }
+
+  match = note.match(
+    /^Disco do sistema: (.+?)\. TRIM mantém desempenho de escrita aleatória em SSDs\/NVMe\.$/
+  );
+  if (match) {
+    return `System drive: ${match[1]}. TRIM preserves random-write performance on SSDs/NVMe.`;
+  }
+
+  match = note.match(
+    /^Requer Windows 11 22H2\+ \(build >= 22621\)\. Build atual: (\d+)\.$/
+  );
+  if (match) {
+    return `Requires Windows 11 22H2+ (build >= 22621). Current build: ${match[1]}.`;
+  }
+
+  match = note.match(/^Windows build (\d+) compatível com BBRv2\.$/);
+  if (match) {
+    return `Windows build ${match[1]} supports BBRv2.`;
+  }
+
+  return note;
+}
+
+export function localizeTweakTitle(
+  tweakId: string,
+  fallbackTitle: string,
+  locale: AppLocale
+): string {
+  if (locale === "pt") return fallbackTitle;
+  return TWEAK_EN[tweakId]?.title ?? fallbackTitle;
+}
+
+export function localizePrivilegeLabel(
+  label: string | undefined,
+  locale: AppLocale
+): string {
+  if (!label) {
+    return locale === "pt" ? "Indisponível" : "Unavailable";
+  }
+  if (locale === "pt") return label;
+  const lower = label.toLowerCase();
+  if (lower.includes("administrador")) return "Administrator";
+  if (lower.includes("usuário padrão") || lower.includes("usuario padrao")) {
+    return "Standard User";
+  }
+  return label;
+}
+
+const NIC_PROPERTY_EN: Record<
+  string,
+  { displayName: string; description: string }
+> = {
+  "*InterruptModeration": {
+    displayName: "Interrupt Moderation (Immediate IRQ Packet Delivery)",
+    description:
+      "Disables NIC interrupt coalescing buffers so incoming game UDP packets reach the CPU immediately.",
+  },
+  "*FlowControl": {
+    displayName: "Flow Control (Disable PAUSE Frames)",
+    description:
+      "Prevents artificial TX/RX hardware PAUSE frames on broadband and fiber connections.",
+  },
+  "*EEE": {
+    displayName: "Energy-Efficient Ethernet (EEE / Green Ethernet)",
+    description:
+      "Disables IEEE 802.3az physical link power-saving states that introduce micro-jitter when resuming traffic.",
+  },
+  "*PriorityVLANTag": {
+    displayName: "Priority & VLAN Tagging Overhead",
+    description:
+      "Removes extra 802.1Q VLAN header processing inside the home network adapter driver.",
+  },
+  "*LsoV2IPv4": {
+    displayName: "Large Send Offload v2 (IPv4)",
+    description:
+      "Avoids large packet segmentation queuing on the NIC chip while small game packets wait for transmission.",
+  },
+  "*LsoV2IPv6": {
+    displayName: "Large Send Offload v2 (IPv6)",
+    description:
+      "Avoids IPv6 LSO segmentation queuing inside network adapter hardware.",
+  },
+};
+
+export function localizeNicProperty(
+  prop: NicDriverProperty,
+  locale: AppLocale
+): NicDriverProperty {
+  if (locale === "pt") return prop;
+  const en = NIC_PROPERTY_EN[prop.valueName];
+  if (!en) return prop;
+  return {
+    ...prop,
+    displayName: en.displayName,
+    description: en.description,
+  };
+}
+
+export function localizeMtuHint(
+  hint: string,
+  optimalMtu: number,
+  locale: AppLocale
+): string {
+  if (locale === "pt") return hint;
+  if (optimalMtu === 1500) {
+    return "Standard Ethernet / IPoE Fiber (1500 bytes)";
+  }
+  if (optimalMtu === 1492) {
+    return "PPPoE Fiber Detected (8-byte overhead — 1492 bytes avoids fragmentation)";
+  }
+  return `Tunnel / Encapsulation Detected (Optimal non-fragmented MTU: ${optimalMtu} bytes)`;
+}
+
+export function localizeBottleneckSummary(
+  summary: string,
+  locale: AppLocale
+): string {
+  if (locale === "pt") return summary;
+  if (summary.startsWith("Gargalo detectado no Salto 1")) {
+    return "Bottleneck detected at Hop 1 (Local Router / Wi-Fi). Prefer a Cat6 Ethernet cable or enable QoS DSCP 46.";
+  }
+  let match = summary.match(
+    /^Maior salto de latência \(\+([\d.]+) ms\) no Salto (\d+) \(CGNAT \/ Roteamento da Operadora ISP\)\.$/
+  );
+  if (match) {
+    return `Largest latency jump (+${match[1]} ms) at Hop ${match[2]} (CGNAT / ISP Routing).`;
+  }
+  match = summary.match(
+    /^Maior salto de latência \(\+([\d.]+) ms\) no Salto (\d+) \(Rota de Backbone \/ Longa Distância\)\.$/
+  );
+  if (match) {
+    return `Largest latency jump (+${match[1]} ms) at Hop ${match[2]} (Backbone / Long-Distance Route).`;
+  }
+  if (summary.startsWith("Rota limpa e progressiva")) {
+    return "Clean, progressive route with no abrupt local or ISP latency spikes.";
+  }
+  return summary;
+}
+
+export function localizeNetFlushMessage(
+  msg: string,
+  locale: AppLocale
+): string {
+  if (locale === "pt") return msg;
+  if (msg.includes("Cache DNS e tabela ARP")) {
+    return "DNS cache and ARP table flushed successfully.";
+  }
+  return msg;
+}
+
 export function localizeTweak(item: TweakItem, locale: AppLocale): TweakItem {
   if (locale === "pt") return item;
   const en = TWEAK_EN[item.id];
-  if (!en) return item;
+  const hardwareNote = localizeHardwareNote(item.hardwareNote, locale);
+  if (!en) {
+    return hardwareNote === item.hardwareNote
+      ? item
+      : { ...item, hardwareNote };
+  }
   return {
     ...item,
     title: en.title,
     description: en.description,
     benchmarkNote: en.benchmarkNote,
+    hardwareNote,
   };
 }
 
@@ -526,9 +713,6 @@ export const UI_COPY = {
       tweaksTitle: "Tweaks do sistema",
       tweaksSub:
         "58 otimizações auditadas com backup atômico prévio e reversão unitária ou em lote",
-      scanning: "ESCANEANDO",
-      stream1Hz: "STREAM 1 HZ",
-      standby: "STANDBY",
       lastScan: "Último scan",
       rescan: "Reescanear",
       scanningBtn: "Escaneando",
@@ -607,9 +791,6 @@ export const UI_COPY = {
       tweaksTitle: "System Tweaks",
       tweaksSub:
         "58 audited zero-placebo optimizations with atomic pre-mutation backup and per-tweak rollback",
-      scanning: "SCANNING",
-      stream1Hz: "STREAM 1 HZ",
-      standby: "STANDBY",
       lastScan: "Last scan",
       rescan: "Rescan",
       scanningBtn: "Scanning",

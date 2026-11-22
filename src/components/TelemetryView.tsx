@@ -5,7 +5,7 @@ import {
   Cpu,
   MemoryStick,
 } from "lucide-react";
-import type { TelemetryTick } from "../types/system";
+import type { AppLocale, TelemetryTick } from "../types/system";
 import {
   formatBytes,
   formatBytesPerSec,
@@ -20,9 +20,16 @@ import { Progress } from "./ui/progress";
 interface TelemetryViewProps {
   latest: TelemetryTick | null;
   history: TelemetryTick[];
+  locale?: AppLocale;
 }
 
-export function TelemetryView({ latest, history }: TelemetryViewProps) {
+export function TelemetryView({
+  latest,
+  history,
+  locale = "pt",
+}: TelemetryViewProps) {
+  const isPt = locale === "pt";
+
   if (!latest) {
     return (
       <Card>
@@ -32,11 +39,14 @@ export function TelemetryView({ latest, history }: TelemetryViewProps) {
           </div>
           <div>
             <h2 className="font-heading text-base font-bold">
-              Aguardando amostras de telemetria
+              {isPt
+                ? "Aguardando amostras de telemetria"
+                : "Waiting for telemetry samples"}
             </h2>
             <p className="mt-1 max-w-xl text-xs leading-relaxed text-foreground/75">
-              O stream telemetry://tick é emitido automaticamente a 1 Hz pelo
-              backend Rust dentro do runtime Tauri.
+              {isPt
+                ? "O stream telemetry://tick é emitido automaticamente a 1 Hz pelo backend Rust dentro do runtime Tauri."
+                : "The telemetry://tick stream is emitted automatically at 1 Hz by the Rust backend inside the Tauri runtime."}
             </p>
           </div>
         </CardContent>
@@ -54,20 +64,21 @@ export function TelemetryView({ latest, history }: TelemetryViewProps) {
           <div className="p-4">
             <div className="flex items-center gap-1.5 font-heading text-xs font-bold uppercase text-foreground/70">
               <Cpu className="size-4" aria-hidden="true" />
-              <span>CPU global</span>
+              <span>{isPt ? "CPU global" : "Global CPU"}</span>
             </div>
             <div className="nb-mono mt-2 text-2xl font-bold">
               {formatPercent(latest.cpuUsagePercent)}
             </div>
             <div className="nb-mono mt-1 text-[11px] text-foreground/70">
-              {latest.cpuPerCorePercent.length} threads monitoradas
+              {latest.cpuPerCorePercent.length}{" "}
+              {isPt ? "threads monitoradas" : "threads monitored"}
             </div>
           </div>
 
           <div className="p-4">
             <div className="flex items-center gap-1.5 font-heading text-xs font-bold uppercase text-foreground/70">
               <MemoryStick className="size-4" aria-hidden="true" />
-              <span>Memória em uso</span>
+              <span>{isPt ? "Memória em uso" : "Memory in use"}</span>
             </div>
             <div className="nb-mono mt-2 text-2xl font-bold">
               {formatPercent(latest.memoryPercent)}
@@ -87,7 +98,9 @@ export function TelemetryView({ latest, history }: TelemetryViewProps) {
               {formatBytesPerSec(latest.networkRxBytesPerSec)}
             </div>
             <div className="mt-1 text-[11px] text-foreground/70">
-              Soma das interfaces ativas
+              {isPt
+                ? "Soma das interfaces ativas"
+                : "Sum across active interfaces"}
             </div>
           </div>
 
@@ -116,23 +129,25 @@ export function TelemetryView({ latest, history }: TelemetryViewProps) {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <TelemetryChartCard
-          title="Histórico de CPU"
+          title={isPt ? "Histórico de CPU" : "CPU History"}
           currentValue={latest.cpuUsagePercent}
           values={cpuSeries}
           stroke="var(--chart-1)"
           fill="color-mix(in srgb, var(--chart-1) 24%, transparent)"
           badgeVariant="default"
           sampleCount={history.length}
+          locale={locale}
         />
 
         <TelemetryChartCard
-          title="Histórico de memória RAM"
+          title={isPt ? "Histórico de memória RAM" : "RAM Memory History"}
           currentValue={latest.memoryPercent}
           values={memSeries}
           stroke="var(--chart-4)"
           fill="color-mix(in srgb, var(--chart-4) 24%, transparent)"
           badgeVariant="safe"
           sampleCount={history.length}
+          locale={locale}
         />
       </div>
 
@@ -140,15 +155,17 @@ export function TelemetryView({ latest, history }: TelemetryViewProps) {
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <div>
             <CardTitle className="text-base">
-              Distribuição por núcleo lógico
+              {isPt
+                ? "Distribuição por núcleo lógico"
+                : "Per-Logical-Core Distribution"}
             </CardTitle>
             <p className="mt-0.5 text-xs text-foreground/70">
-              Atualização contínua via{" "}
+              {isPt ? "Atualização contínua via " : "Live updates via "}
               <code className="nb-mono font-bold">telemetry://tick</code>
             </p>
           </div>
           <Badge variant="neutral" className="nb-mono">
-            {formatTimestamp(latest.timestamp)}
+            {formatTimestamp(latest.timestamp, locale)}
           </Badge>
         </CardHeader>
 
@@ -194,6 +211,7 @@ function TelemetryChartCard({
   fill,
   badgeVariant,
   sampleCount,
+  locale,
 }: {
   title: string;
   currentValue: number;
@@ -202,6 +220,7 @@ function TelemetryChartCard({
   fill: string;
   badgeVariant: "default" | "safe";
   sampleCount: number;
+  locale: AppLocale;
 }) {
   const width = 480;
   const height = 140;
@@ -232,7 +251,9 @@ function TelemetryChartCard({
         <div>
           <CardTitle className="text-base">{title}</CardTitle>
           <p className="mt-0.5 text-xs text-foreground/70">
-            Janela de {sampleCount}s (máx. 45s)
+            {locale === "pt"
+              ? `Janela de ${sampleCount}s (máx. 45s)`
+              : `${sampleCount}s window (max 45s)`}
           </p>
         </div>
         <Badge variant={badgeVariant} className="nb-mono text-sm">

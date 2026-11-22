@@ -9,7 +9,7 @@ import {
   Radar,
   Server,
 } from "lucide-react";
-import type { SystemScanReport } from "../types/system";
+import type { AppLocale, SystemScanReport } from "../types/system";
 import {
   formatBytes,
   formatFrequencyMhz,
@@ -24,12 +24,15 @@ import { Progress } from "./ui/progress";
 interface HardwareViewProps {
   report: SystemScanReport;
   scanning: boolean;
+  locale?: AppLocale;
 }
 
 export const HardwareView = memo(function HardwareView({
   report,
   scanning,
+  locale = "pt",
 }: HardwareViewProps) {
+  const isPt = locale === "pt";
   const { hardware, peripherals } = report;
   const memPercent =
     hardware.memory.totalBytes > 0
@@ -46,8 +49,12 @@ export const HardwareView = memo(function HardwareView({
     peripherals.keyboards.length;
 
   const scannerHeadline = scanning
-    ? "Varredura ativa: WMI, sysinfo e Win32 GDI..."
-    : `Inventário concluído — ${hardware.gpus.length} GPU, ${hardware.disks.length} discos, ${totalPeripherals} periféricos`;
+    ? isPt
+      ? "Varredura ativa: WMI, sysinfo e Win32 GDI..."
+      : "Active scan: WMI, sysinfo, and Win32 GDI..."
+    : isPt
+      ? `Inventário concluído — ${hardware.gpus.length} GPU, ${hardware.disks.length} discos, ${totalPeripherals} periféricos`
+      : `Inventory completed — ${hardware.gpus.length} GPU, ${hardware.disks.length} disks, ${totalPeripherals} peripherals`;
 
   return (
     <div className="space-y-5">
@@ -70,7 +77,7 @@ export const HardwareView = memo(function HardwareView({
           </div>
 
           <Badge variant="neutral" className="nb-mono">
-            {formatTimestamp(report.scannedAt)}
+            {formatTimestamp(report.scannedAt, locale)}
           </Badge>
         </CardContent>
       </Card>
@@ -80,7 +87,9 @@ export const HardwareView = memo(function HardwareView({
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Cpu className="size-4" aria-hidden="true" />
-              <span>Processador e plataforma</span>
+              <span>
+                {isPt ? "Processador e plataforma" : "Processor & Platform"}
+              </span>
             </CardTitle>
             <Badge variant="default" className="nb-mono">
               {formatPercent(hardware.cpu.usagePercent)}
@@ -88,28 +97,38 @@ export const HardwareView = memo(function HardwareView({
           </CardHeader>
 
           <CardContent className="space-y-2.5 text-xs">
-            <SpecRow label="Modelo da CPU" value={hardware.cpu.brand} />
             <SpecRow
-              label="Núcleos"
-              value={`${hardware.cpu.physicalCores} físicos / ${hardware.cpu.logicalCores} lógicos`}
+              label={isPt ? "Modelo da CPU" : "CPU Model"}
+              value={hardware.cpu.brand}
+            />
+            <SpecRow
+              label={isPt ? "Núcleos" : "Cores"}
+              value={
+                isPt
+                  ? `${hardware.cpu.physicalCores} físicos / ${hardware.cpu.logicalCores} lógicos`
+                  : `${hardware.cpu.physicalCores} physical / ${hardware.cpu.logicalCores} logical`
+              }
               mono
             />
             <SpecRow
-              label="Frequência base"
+              label={isPt ? "Frequência base" : "Base Frequency"}
               value={formatFrequencyMhz(hardware.cpu.frequencyMhz)}
               mono
             />
             <SpecRow
-              label="Sistema operacional"
+              label={isPt ? "Sistema operacional" : "Operating System"}
               value={`${hardware.os.name} ${hardware.os.version} (${hardware.os.arch})`}
             />
             <SpecRow label="Hostname" value={hardware.os.hostname} mono />
             <SpecRow
-              label="Tempo ativo"
+              label={isPt ? "Tempo ativo" : "Uptime"}
               value={formatUptime(hardware.os.uptimeSeconds)}
               mono
             />
-            <SpecRow label="Plano de energia" value={hardware.powerPlan.name} />
+            <SpecRow
+              label={isPt ? "Plano de energia" : "Power Plan"}
+              value={hardware.powerPlan.name}
+            />
           </CardContent>
         </Card>
 
@@ -117,14 +136,18 @@ export const HardwareView = memo(function HardwareView({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Server className="size-4" aria-hidden="true" />
-              <span>Memória e placas de vídeo</span>
+              <span>
+                {isPt ? "Memória e placas de vídeo" : "Memory & Graphics"}
+              </span>
             </CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-heading font-bold">RAM física</span>
+                <span className="font-heading font-bold">
+                  {isPt ? "RAM física" : "Physical RAM"}
+                </span>
                 <span className="nb-mono font-bold">
                   {formatBytes(hardware.memory.usedBytes)} /{" "}
                   {formatBytes(hardware.memory.totalBytes)} (
@@ -133,14 +156,15 @@ export const HardwareView = memo(function HardwareView({
               </div>
               <Progress value={memPercent} indicatorClassName="bg-chart-4" />
               <div className="nb-mono text-[11px] text-foreground/70">
-                Disponível: {formatBytes(hardware.memory.availableBytes)}
+                {isPt ? "Disponível" : "Available"}:{" "}
+                {formatBytes(hardware.memory.availableBytes)}
               </div>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-heading font-bold">
-                  Arquivo de paginação
+                  {isPt ? "Arquivo de paginação" : "Pagefile / Swap"}
                 </span>
                 <span className="nb-mono text-foreground/75">
                   {formatBytes(hardware.memory.swapUsedBytes)} /{" "}
@@ -152,11 +176,14 @@ export const HardwareView = memo(function HardwareView({
 
             <div className="border-t-2 border-border pt-3.5">
               <div className="mb-2.5 font-heading text-xs font-bold uppercase text-foreground/75">
-                Controladores gráficos ({hardware.gpus.length})
+                {isPt ? "Controladores gráficos" : "Display Adapters"} (
+                {hardware.gpus.length})
               </div>
               {hardware.gpus.length === 0 ? (
                 <p className="text-xs text-foreground/70">
-                  Nenhuma GPU reportada via WMI.
+                  {isPt
+                    ? "Nenhuma GPU reportada via WMI."
+                    : "No GPUs reported via WMI."}
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -176,10 +203,12 @@ export const HardwareView = memo(function HardwareView({
                       <div className="nb-mono mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-foreground/75">
                         <span>Driver: {gpu.driverVersion}</span>
                         <span>
-                          VRAM WMI:{" "}
+                          VRAM:{" "}
                           {gpu.vramBytes > 0
                             ? formatBytes(gpu.vramBytes)
-                            : "Não reportada"}
+                            : isPt
+                              ? "Não reportada"
+                              : "Not reported"}
                         </span>
                       </div>
                     </div>
@@ -195,7 +224,7 @@ export const HardwareView = memo(function HardwareView({
         <div className="flex items-center gap-2 border-b-2 border-border bg-main/15 px-5 py-3.5">
           <HardDrive className="size-4" aria-hidden="true" />
           <h2 className="font-heading text-base font-bold">
-            Armazenamento ({hardware.disks.length})
+            {isPt ? "Armazenamento" : "Storage"} ({hardware.disks.length})
           </h2>
         </div>
 
@@ -241,7 +270,8 @@ export const HardwareView = memo(function HardwareView({
 
                 <div className="nb-mono text-right text-xs md:col-span-3">
                   <div className="font-bold">
-                    {formatBytes(disk.availableBytes)} livres
+                    {formatBytes(disk.availableBytes)}{" "}
+                    {isPt ? "livres" : "free"}
                   </div>
                   <div className="text-[11px] text-foreground/70">
                     {formatBytes(used)} / {formatBytes(disk.totalBytes)} (
@@ -259,13 +289,18 @@ export const HardwareView = memo(function HardwareView({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Monitor className="size-4" aria-hidden="true" />
-              <span>Monitores ({peripherals.monitors.length})</span>
+              <span>
+                {isPt ? "Monitores" : "Monitors"} ({peripherals.monitors.length}
+                )
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
             {peripherals.monitors.length === 0 ? (
               <p className="text-xs text-foreground/70">
-                Nenhum monitor ativo detectado.
+                {isPt
+                  ? "Nenhum monitor ativo detectado."
+                  : "No active monitors detected."}
               </p>
             ) : (
               peripherals.monitors.map((mon) => (
@@ -277,7 +312,11 @@ export const HardwareView = memo(function HardwareView({
                     <span className="nb-mono text-xs font-bold">
                       {mon.width}×{mon.height} @ {mon.refreshRateHz} Hz
                     </span>
-                    {mon.isPrimary && <Badge variant="default">Principal</Badge>}
+                    {mon.isPrimary && (
+                      <Badge variant="default">
+                        {isPt ? "Principal" : "Primary"}
+                      </Badge>
+                    )}
                   </div>
                   <div className="mt-1 truncate text-xs font-medium">
                     {mon.adapterString}
@@ -295,13 +334,17 @@ export const HardwareView = memo(function HardwareView({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Mouse className="size-4" aria-hidden="true" />
-              <span>Mouses ({peripherals.mice.length})</span>
+              <span>
+                {isPt ? "Mouses" : "Mice"} ({peripherals.mice.length})
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
             {peripherals.mice.length === 0 ? (
               <p className="text-xs text-foreground/70">
-                Nenhum dispositivo apontador listado.
+                {isPt
+                  ? "Nenhum dispositivo apontador listado."
+                  : "No pointing devices detected."}
               </p>
             ) : (
               peripherals.mice.map((device, idx) => (
@@ -330,13 +373,18 @@ export const HardwareView = memo(function HardwareView({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Keyboard className="size-4" aria-hidden="true" />
-              <span>Teclados ({peripherals.keyboards.length})</span>
+              <span>
+                {isPt ? "Teclados" : "Keyboards"} ({peripherals.keyboards.length}
+                )
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
             {peripherals.keyboards.length === 0 ? (
               <p className="text-xs text-foreground/70">
-                Nenhum teclado listado via WMI.
+                {isPt
+                  ? "Nenhum teclado listado via WMI."
+                  : "No keyboards reported via WMI."}
               </p>
             ) : (
               peripherals.keyboards.map((device, idx) => (
@@ -366,7 +414,8 @@ export const HardwareView = memo(function HardwareView({
         <div className="flex items-center gap-2 border-b-2 border-border bg-main/15 px-5 py-3.5">
           <Network className="size-4" aria-hidden="true" />
           <h2 className="font-heading text-base font-bold">
-            Interfaces de rede ({hardware.networks.length})
+            {isPt ? "Interfaces de rede" : "Network Interfaces"} (
+            {hardware.networks.length})
           </h2>
         </div>
 
@@ -374,10 +423,16 @@ export const HardwareView = memo(function HardwareView({
           <table className="w-full border-collapse text-left text-xs">
             <thead>
               <tr className="border-b-2 border-border bg-background font-heading font-bold">
-                <th className="px-5 py-2.5">Adaptador</th>
-                <th className="px-5 py-2.5">Endereço MAC</th>
-                <th className="px-5 py-2.5 text-right">Recebido total</th>
-                <th className="px-5 py-2.5 text-right">Enviado total</th>
+                <th className="px-5 py-2.5">{isPt ? "Adaptador" : "Adapter"}</th>
+                <th className="px-5 py-2.5">
+                  {isPt ? "Endereço MAC" : "MAC Address"}
+                </th>
+                <th className="px-5 py-2.5 text-right">
+                  {isPt ? "Recebido total" : "Total Received"}
+                </th>
+                <th className="px-5 py-2.5 text-right">
+                  {isPt ? "Enviado total" : "Total Transmitted"}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y-2 divide-border">

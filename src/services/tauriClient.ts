@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  ActiveDnsStatus,
   AppError,
+  ApplyDnsResult,
   ApplyTweaksResult,
   BackupSession,
   BackupSessionSummary,
@@ -163,6 +165,10 @@ export const tauriClient = {
     return invokeTyped<RouteTraceReport>("trace_route_hops", { targetHost });
   },
 
+  getCurrentDnsStatus(): Promise<ActiveDnsStatus> {
+    return invokeTyped<ActiveDnsStatus>("get_current_dns_status");
+  },
+
   runMultiDnsBenchmark(): Promise<DnsBenchmarkEntry[]> {
     return invokeTyped<DnsBenchmarkEntry[]>("run_multi_dns_benchmark");
   },
@@ -171,8 +177,8 @@ export const tauriClient = {
     primaryIp: string,
     secondaryIp: string,
     providerName: string
-  ): Promise<string> {
-    return invokeTyped<string>("apply_custom_dns_provider", {
+  ): Promise<ApplyDnsResult> {
+    return invokeTyped<ApplyDnsResult>("apply_custom_dns_provider", {
       primaryIp,
       secondaryIp,
       providerName,

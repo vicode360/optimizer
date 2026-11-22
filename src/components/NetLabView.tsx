@@ -16,8 +16,15 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
+import {
+  localizeBottleneckSummary,
+  localizeMtuHint,
+  localizeNetFlushMessage,
+  localizeNicProperty,
+} from "../i18n";
 import { normalizeAppError, tauriClient } from "../services/tauriClient";
 import type {
+  ActiveDnsStatus,
   AppError,
   AppLocale,
   DnsBenchmarkEntry,
@@ -73,6 +80,7 @@ export const NetLabView = memo(function NetLabView({
   const [tracingHost, setTracingHost] = useState<string | null>(null);
 
   const [dnsEntries, setDnsEntries] = useState<DnsBenchmarkEntry[]>([]);
+  const [currentDns, setCurrentDns] = useState<ActiveDnsStatus | null>(null);
   const [testingDns, setTestingDns] = useState(false);
   const [applyingDnsId, setApplyingDnsId] = useState<string | null>(null);
 
@@ -93,15 +101,19 @@ export const NetLabView = memo(function NetLabView({
   const [error, setError] = useState<AppError | null>(null);
 
   const refreshLocalState = useCallback(async () => {
-    try {
-      const [policies, nicList] = await Promise.all([
-        tauriClient.listQosPolicies(),
-        tauriClient.listNicDriverTweaks(),
-      ]);
-      setQosPolicies(policies);
-      setNicProps(nicList);
-    } catch {
-      // Ignore initial read errors outside Tauri runtime.
+    const [policiesRes, nicRes, dnsRes] = await Promise.allSettled([
+      tauriClient.listQosPolicies(),
+      tauriClient.listNicDriverTweaks(),
+      tauriClient.getCurrentDnsStatus(),
+    ]);
+    if (policiesRes.status === "fulfilled") {
+      setQosPolicies(policiesRes.value);
+    }
+    if (nicRes.status === "fulfilled") {
+      setNicProps(nicRes.value);
+    }
+    if (dnsRes.status === "fulfilled") {
+      setCurrentDns(dnsRes.value);
     }
   }, []);
 
@@ -139,8 +151,14 @@ export const NetLabView = memo(function NetLabView({
     setTestingDns(true);
     setError(null);
     try {
-      const entries = await tauriClient.runMultiDnsBenchmark();
+      const [entries, activeDns] = await Promise.all([
+        tauriClient.runMultiDnsBenchmark(),
+        tauriClient.getCurrentDnsStatus().catch(() => null),
+      ]);
       setDnsEntries(entries);
+      if (activeDns) {
+        setCurrentDns(activeDns);
+      }
     } catch (err) {
       setError(normalizeAppError(err));
     } finally {
@@ -154,11 +172,22 @@ export const NetLabView = memo(function NetLabView({
     setError(null);
     setStatusBanner(null);
     try {
-      await tauriClient.applyCustomDnsProvider(
+      const result = await tauriClient.applyCustomDnsProvider(
         entry.primaryIp,
         entry.secondaryIp,
         entry.providerName
       );
+      if (result?.currentDns) {
+        setCurrentDns(result.currentDns);
+      } else {
+        setCurrentDns({
+          interfaceAlias: currentDns?.interfaceAlias ?? "Ethernet",
+          servers: [entry.primaryIp, entry.secondaryIp].filter(Boolean),
+          isDhcp: false,
+          matchedProviderId: entry.providerId,
+          matchedProviderName: entry.providerName,
+        });
+      }
       setStatusBanner(
         isPt
           ? `DNS ${entry.providerName} (${entry.primaryIp}) aplicado com snapshot atômico salvo.`
@@ -283,7 +312,7 @@ export const NetLabView = memo(function NetLabView({
     setStatusBanner(null);
     try {
       const msg = await tauriClient.flushNetworkStack();
-      setStatusBanner(msg);
+      setStatusBanner(localizeNetFlushMessage(msg, locale));
     } catch (err) {
       setError(normalizeAppError(err));
     } finally {
@@ -515,7 +544,10 @@ export const NetLabView = memo(function NetLabView({
                       : `Hop-by-Hop Route Inspector -> ${traceReport.targetHost}`}
                   </h3>
                   <p className="mt-0.5 text-xs font-medium text-foreground/85">
-                    {traceReport.bottleneckSummary}
+                    {localizeBottleneckSummary(
+                      traceReport.bottleneckSummary,
+                      locale
+                    )}
                   </p>
                 </div>
                 <Badge
@@ -657,7 +689,7 @@ export const NetLabView = memo(function NetLabView({
                 isPt ? "Nome do Jogo (ex: Marvel Rivals)" : "Game Name"
               }
               disabled={!isAdmin || busyQos}
-              aria-label="Nome do jogo para QoS"
+              aria-label={isPt ? "Nome do jogo para QoS" : "Game name for QoS"}
               className="h-9 text-xs sm:w-56"
             />
             <Input
@@ -670,7 +702,9 @@ export const NetLabView = memo(function NetLabView({
                   : "Exact executable (e.g. game.exe)"
               }
               disabled={!isAdmin || busyQos}
-              aria-label="Executável do jogo para QoS"
+              aria-label={
+                isPt ? "Executável do jogo para QoS" : "Game executable for QoS"
+              }
               className="nb-mono h-9 flex-1 text-xs"
             />
             <Button
@@ -729,7 +763,11 @@ export const NetLabView = memo(function NetLabView({
                       size="icon-xs"
                       disabled={!isAdmin || busyQos}
                       onClick={() => void handleRemoveQos(pol.policyName)}
-                      aria-label={`Remover QoS ${pol.gameName}`}
+                      aria-label={
+                        isPt
+                          ? `Remover QoS ${pol.gameName}`
+                          : `Remove QoS ${pol.gameName}`
+                      }
                       title={isPt ? "Remover política QoS" : "Remove QoS policy"}
                     >
                       <Trash2 className="size-3.5" aria-hidden="true" />
@@ -786,6 +824,54 @@ export const NetLabView = memo(function NetLabView({
           </CardHeader>
 
           <CardContent className="space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-base border-2 border-border bg-background px-3 py-2.5">
+              <div className="min-w-0">
+                <div className="text-[10.5px] font-heading font-bold uppercase text-foreground/65">
+                  {isPt ? "DNS Atual Aplicado" : "Current DNS Applied"}
+                </div>
+                {currentDns ? (
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                    <span className="font-heading font-bold">
+                      {currentDns.matchedProviderName
+                        ? currentDns.matchedProviderName
+                        : currentDns.isDhcp
+                          ? isPt
+                            ? "DHCP (Automático)"
+                            : "DHCP (Automatic)"
+                          : isPt
+                            ? "DNS Customizado"
+                            : "Custom DNS"}
+                    </span>
+                    <span className="nb-mono text-[11px] text-foreground/80">
+                      {currentDns.servers.length > 0
+                        ? currentDns.servers.join(" / ")
+                        : isPt
+                          ? "Automático"
+                          : "Auto"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="nb-mono mt-0.5 text-[11px] text-foreground/70">
+                    {isPt ? "Detectando interface ativa..." : "Detecting active adapter..."}
+                  </div>
+                )}
+              </div>
+
+              {currentDns && (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Badge variant="neutral" className="nb-mono">
+                    {currentDns.interfaceAlias}
+                  </Badge>
+                  <Badge
+                    variant={currentDns.isDhcp ? "neutral" : "safe"}
+                    className="nb-mono"
+                  >
+                    {currentDns.isDhcp ? "DHCP" : "STATIC"}
+                  </Badge>
+                </div>
+              )}
+            </div>
+
             {dnsEntries.length === 0 ? (
               <div className="rounded-base border-2 border-border bg-background p-4 text-xs text-foreground/80">
                 {isPt
@@ -797,13 +883,19 @@ export const NetLabView = memo(function NetLabView({
                 const avg = entry.avgMs;
                 const barPct =
                   avg !== null ? Math.max(8, Math.min(100, 100 - avg)) : 0;
+                const isAppliedDns = Boolean(
+                  currentDns &&
+                    (currentDns.matchedProviderId === entry.providerId ||
+                      currentDns.servers[0]?.trim() === entry.primaryIp)
+                );
+                const isApplyingThis = applyingDnsId === entry.providerId;
                 return (
                   <div
                     key={entry.providerId}
                     className="space-y-1.5 rounded-base border-2 border-border bg-background p-3"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {index === 0 && avg !== null && (
                           <Badge variant="safe">#1 FASTEST</Badge>
                         )}
@@ -826,18 +918,41 @@ export const NetLabView = memo(function NetLabView({
                         )}
                         <Button
                           type="button"
-                          variant={index === 0 ? "success" : "neutral"}
+                          variant={
+                            isAppliedDns || index === 0 ? "success" : "neutral"
+                          }
                           size="xs"
                           disabled={
-                            !isAdmin || applyingDnsId !== null || avg === null
+                            !isAdmin ||
+                            applyingDnsId !== null ||
+                            avg === null ||
+                            isAppliedDns
                           }
                           onClick={() => void handleApplyDns(entry)}
                         >
-                          {applyingDnsId === entry.providerId
-                            ? "..."
-                            : isPt
-                              ? "Aplicar"
-                              : "Apply"}
+                          {isApplyingThis ? (
+                            <>
+                              <RefreshCw
+                                className="size-3 animate-spin"
+                                aria-hidden="true"
+                              />
+                              <span>
+                                {isPt ? "Aplicando..." : "Applying..."}
+                              </span>
+                            </>
+                          ) : isAppliedDns ? (
+                            <>
+                              <CheckCircle2
+                                className="size-3"
+                                aria-hidden="true"
+                              />
+                              <span>{isPt ? "Aplicado" : "Applied"}</span>
+                            </>
+                          ) : isPt ? (
+                            "Aplicar"
+                          ) : (
+                            "Apply"
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -845,7 +960,7 @@ export const NetLabView = memo(function NetLabView({
                       value={barPct}
                       className="h-2"
                       indicatorClassName={
-                        index === 0 ? "bg-chart-4" : "bg-main"
+                        isAppliedDns || index === 0 ? "bg-chart-4" : "bg-main"
                       }
                     />
                   </div>
@@ -945,7 +1060,12 @@ export const NetLabView = memo(function NetLabView({
                 </div>
 
                 <p className="text-xs text-foreground/80">
-                  {mtuResult.connectionTypeHint} (Payload DF máx:{" "}
+                  {localizeMtuHint(
+                    mtuResult.connectionTypeHint,
+                    mtuResult.optimalMtu,
+                    locale
+                  )}{" "}
+                  ({isPt ? "Payload DF máx:" : "Max DF payload:"}{" "}
                   <strong className="nb-mono">
                     {mtuResult.maxUnfragmentedPayload} bytes
                   </strong>
@@ -1009,52 +1129,55 @@ export const NetLabView = memo(function NetLabView({
             </div>
           ) : (
             <div className="divide-y-2 divide-border rounded-base border-2 border-border bg-secondary-background">
-              {nicProps.map((prop) => (
-                <div
-                  key={prop.id}
-                  className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-heading text-xs font-bold">
-                        {prop.displayName}
-                      </span>
-                      <Badge variant={prop.isOptimized ? "safe" : "moderate"}>
-                        {prop.isOptimized
-                          ? isPt
-                            ? "Otimizado"
-                            : "Optimized"
-                          : isPt
-                            ? `Atual: ${prop.currentValue}`
-                            : `Current: ${prop.currentValue}`}
-                      </Badge>
-                      <Badge variant="neutral" className="nb-mono">
-                        {prop.adapterName}
-                      </Badge>
+              {nicProps.map((rawProp) => {
+                const prop = localizeNicProperty(rawProp, locale);
+                return (
+                  <div
+                    key={prop.id}
+                    className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-heading text-xs font-bold">
+                          {prop.displayName}
+                        </span>
+                        <Badge variant={prop.isOptimized ? "safe" : "moderate"}>
+                          {prop.isOptimized
+                            ? isPt
+                              ? "Otimizado"
+                              : "Optimized"
+                            : isPt
+                              ? `Atual: ${prop.currentValue}`
+                              : `Current: ${prop.currentValue}`}
+                        </Badge>
+                        <Badge variant="neutral" className="nb-mono">
+                          {prop.adapterName}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-foreground/75">
+                        {prop.description}
+                      </p>
                     </div>
-                    <p className="mt-1 text-xs text-foreground/75">
-                      {prop.description}
-                    </p>
-                  </div>
 
-                  {!prop.isOptimized && (
-                    <Button
-                      type="button"
-                      variant="default"
-                      size="xs"
-                      disabled={!isAdmin || busyNicId !== null}
-                      onClick={() => void handleOptimizeNicProp(prop)}
-                      className="shrink-0 self-start sm:self-center"
-                    >
-                      {busyNicId === prop.id
-                        ? "..."
-                        : isPt
-                          ? "Otimizar Driver"
-                          : "Optimize Driver"}
-                    </Button>
-                  )}
-                </div>
-              ))}
+                    {!prop.isOptimized && (
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="xs"
+                        disabled={!isAdmin || busyNicId !== null}
+                        onClick={() => void handleOptimizeNicProp(prop)}
+                        className="shrink-0 self-start sm:self-center"
+                      >
+                        {busyNicId === prop.id
+                          ? "..."
+                          : isPt
+                            ? "Otimizar Driver"
+                            : "Optimize Driver"}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

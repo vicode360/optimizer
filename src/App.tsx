@@ -19,6 +19,7 @@ import { usePrivilegeStatus } from "./hooks/usePrivilegeStatus";
 import { useSystemScan } from "./hooks/useSystemScan";
 import { useTelemetry } from "./hooks/useTelemetry";
 import { useTweaks } from "./hooks/useTweaks";
+import { localizeTweak } from "./i18n";
 import { isTauriRuntime, normalizeAppError, tauriClient } from "./services/tauriClient";
 import type {
   ActiveSection,
@@ -168,19 +169,24 @@ export function App() {
   });
 
   const handleExportReport = useCallback(() => {
-    const applied = tweaks.items.filter((t) => t.applied);
+    const isPt = locale === "pt";
+    const applied = tweaks.items
+      .filter((t) => t.applied)
+      .map((t) => localizeTweak(t, locale));
     const lines = [
-      `# Optimizer — Technical System Audit Report`,
-      `Generated at: ${new Date().toISOString()}`,
+      isPt
+        ? `# Optimizer — Laudo Técnico de Auditoria do Sistema`
+        : `# Optimizer — Technical System Audit Report`,
+      `${isPt ? "Gerado em" : "Generated at"}: ${new Date().toISOString()}`,
       ``,
-      `## Hardware Summary`,
+      isPt ? `## Resumo de Hardware` : `## Hardware Summary`,
       `- **Host / OS:** ${report?.hardware.os.hostname ?? "—"} (${report?.hardware.os.name ?? ""} ${report?.hardware.os.version ?? ""})`,
       `- **CPU:** ${report?.hardware.cpu.brand ?? "—"} (${report?.hardware.cpu.physicalCores ?? 0}C / ${report?.hardware.cpu.logicalCores ?? 0}T)`,
-      `- **Memory:** ${formatBytes(report?.hardware.memory.usedBytes ?? 0)} / ${formatBytes(report?.hardware.memory.totalBytes ?? 0)}`,
-      `- **Active Power Plan:** ${report?.hardware.powerPlan.name ?? "—"}`,
+      `- **${isPt ? "Memória" : "Memory"}:** ${formatBytes(report?.hardware.memory.usedBytes ?? 0)} / ${formatBytes(report?.hardware.memory.totalBytes ?? 0)}`,
+      `- **${isPt ? "Plano de Energia Ativo" : "Active Power Plan"}:** ${report?.hardware.powerPlan.name ?? "—"}`,
       `- **GPUs:** ${(report?.hardware.gpus ?? []).map((g) => `${g.name} (${formatBytes(g.vramBytes)})`).join(", ") || "—"}`,
       ``,
-      `## Applied Optimizations (${applied.length}/${tweaks.items.length})`,
+      `## ${isPt ? "Otimizações Aplicadas" : "Applied Optimizations"} (${applied.length}/${tweaks.items.length})`,
       ...applied.map((t) => `- \`${t.id}\` — **${t.title}** (${t.risk.toUpperCase()})`),
       ``,
     ];
@@ -195,7 +201,7 @@ export function App() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [report, tweaks.items]);
+  }, [locale, report, tweaks.items]);
 
   const handleRequestElevation = useCallback(() => {
     if (elevatingRef.current) return;
@@ -343,7 +349,6 @@ export function App() {
           scannedAt={report?.scannedAt ?? null}
           scanning={scanning}
           onRunScan={handleRunScan}
-          telemetryConnected={telemetry.connected}
           theme={theme}
           onToggleTheme={handleToggleTheme}
           locale={locale}
@@ -359,7 +364,10 @@ export function App() {
             {elevationError && (
               <Alert variant="destructive">
                 <AlertTriangle className="size-4" aria-hidden="true" />
-                <AlertTitle>Erro de elevação [{elevationError.code}]</AlertTitle>
+                <AlertTitle>
+                  {locale === "pt" ? "Erro de elevação" : "Elevation error"} [
+                  {elevationError.code}]
+                </AlertTitle>
                 <AlertDescription className="flex w-full flex-wrap items-center justify-between gap-3">
                   <span>{elevationError.message}</span>
                   <Button
@@ -368,7 +376,7 @@ export function App() {
                     size="xs"
                     onClick={() => setElevationError(null)}
                   >
-                    Fechar
+                    {locale === "pt" ? "Fechar" : "Close"}
                   </Button>
                 </AlertDescription>
               </Alert>
@@ -378,7 +386,10 @@ export function App() {
               <Alert variant="warning">
                 <AlertTriangle className="size-4" aria-hidden="true" />
                 <AlertTitle>
-                  Falha ao consultar privilégio Win32 [{privilegeError.code}]
+                  {locale === "pt"
+                    ? "Falha ao consultar privilégio Win32"
+                    : "Failed to query Win32 privilege"}{" "}
+                  [{privilegeError.code}]
                 </AlertTitle>
                 <AlertDescription>{privilegeError.message}</AlertDescription>
               </Alert>
@@ -386,6 +397,7 @@ export function App() {
 
             {activeSection === "diagnostics" && (
               <ScanGate
+                locale={locale}
                 scanning={scanning}
                 errorMessage={scanError?.message ?? null}
                 errorCode={scanError?.code ?? null}
@@ -418,6 +430,7 @@ export function App() {
 
             {activeSection === "hardware" && (
               <ScanGate
+                locale={locale}
                 scanning={scanning}
                 errorMessage={scanError?.message ?? null}
                 errorCode={scanError?.code ?? null}
@@ -425,7 +438,11 @@ export function App() {
                 onRetry={handleRunScan}
               >
                 {report && (
-                  <HardwareView report={report} scanning={scanning} />
+                  <HardwareView
+                    report={report}
+                    scanning={scanning}
+                    locale={locale}
+                  />
                 )}
               </ScanGate>
             )}
@@ -434,6 +451,7 @@ export function App() {
               <TelemetryView
                 latest={telemetry.latest}
                 history={telemetry.history}
+                locale={locale}
               />
             )}
 
@@ -534,6 +552,7 @@ export function App() {
 }
 
 function ScanGate({
+  locale,
   scanning,
   errorMessage,
   errorCode,
@@ -541,6 +560,7 @@ function ScanGate({
   onRetry,
   children,
 }: {
+  locale: AppLocale;
   scanning: boolean;
   errorMessage: string | null;
   errorCode: string | null;
@@ -548,6 +568,7 @@ function ScanGate({
   onRetry: () => void;
   children: React.ReactNode;
 }) {
+  const isPt = locale === "pt";
   if (scanning && !hasReport) {
     return (
       <Card>
@@ -557,10 +578,14 @@ function ScanGate({
           </div>
           <div>
             <div className="font-heading text-sm font-bold">
-              Coletando inventário do sistema...
+              {isPt
+                ? "Coletando inventário do sistema..."
+                : "Collecting system inventory..."}
             </div>
             <p className="nb-mono text-xs text-foreground/70">
-              Lendo hardware, periféricos, Registro e planos de energia via Rust
+              {isPt
+                ? "Lendo hardware, periféricos, Registro e planos de energia via Rust"
+                : "Reading hardware, peripherals, Registry, and power schemes via Rust"}
             </p>
           </div>
         </CardContent>
@@ -572,7 +597,9 @@ function ScanGate({
     return (
       <Alert variant="destructive">
         <AlertTriangle className="size-4" aria-hidden="true" />
-        <AlertTitle>Falha ao ler dados do sistema</AlertTitle>
+        <AlertTitle>
+          {isPt ? "Falha ao ler dados do sistema" : "Failed to read system data"}
+        </AlertTitle>
         <AlertDescription className="space-y-3">
           <p>
             {errorCode && (
@@ -582,7 +609,7 @@ function ScanGate({
           </p>
           <Button type="button" variant="neutral" size="sm" onClick={onRetry}>
             <RefreshCw className="size-3.5" aria-hidden="true" />
-            <span>Tentar novamente</span>
+            <span>{isPt ? "Tentar novamente" : "Try again"}</span>
           </Button>
         </AlertDescription>
       </Alert>
@@ -594,7 +621,11 @@ function ScanGate({
       {errorMessage && hasReport && (
         <Alert variant="destructive">
           <AlertTriangle className="size-4" aria-hidden="true" />
-          <AlertTitle>Falha ao atualizar varredura do sistema</AlertTitle>
+          <AlertTitle>
+            {isPt
+              ? "Falha ao atualizar varredura do sistema"
+              : "Failed to refresh system scan"}
+          </AlertTitle>
           <AlertDescription className="flex w-full flex-wrap items-center justify-between gap-3">
             <span>
               {errorCode && (
@@ -604,7 +635,7 @@ function ScanGate({
             </span>
             <Button type="button" variant="neutral" size="xs" onClick={onRetry}>
               <RefreshCw className="size-3.5" aria-hidden="true" />
-              <span>Tentar novamente</span>
+              <span>{isPt ? "Tentar novamente" : "Try again"}</span>
             </Button>
           </AlertDescription>
         </Alert>
