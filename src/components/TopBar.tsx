@@ -1,5 +1,6 @@
-import { Moon, RefreshCw, Sun } from "lucide-react";
-import type { ActiveSection } from "../types/system";
+import { Languages, Moon, RefreshCw, Sun } from "lucide-react";
+import { UI_COPY } from "../i18n";
+import type { ActiveSection, AppLocale } from "../types/system";
 import { formatTimestamp } from "../utils/format";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -12,33 +13,9 @@ interface TopBarProps {
   telemetryConnected: boolean;
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  locale: AppLocale;
+  onToggleLocale: () => void;
 }
-
-const SECTION_META: Record<
-  ActiveSection,
-  { title: string; subtitle: string }
-> = {
-  diagnostics: {
-    title: "Diagnóstico",
-    subtitle: "Saúde do sistema, métricas instantâneas e recomendações reais",
-  },
-  hardware: {
-    title: "Hardware e periféricos",
-    subtitle: "Inventário nativo via sysinfo, WMI e Win32 GDI",
-  },
-  telemetry: {
-    title: "Telemetria ao vivo",
-    subtitle: "Monitoramento contínuo de CPU, memória e tráfego de rede (1 Hz)",
-  },
-  backups: {
-    title: "Backups e segurança",
-    subtitle: "Snapshots atômicos gravados em %AppData%/optimizer/backups",
-  },
-  tweaks: {
-    title: "Tweaks do sistema",
-    subtitle: "58 otimizações auditadas com backup atômico prévio e reversão exata",
-  },
-};
 
 export function TopBar({
   activeSection,
@@ -48,8 +25,42 @@ export function TopBar({
   telemetryConnected,
   theme,
   onToggleTheme,
+  locale,
+  onToggleLocale,
 }: TopBarProps) {
-  const meta = SECTION_META[activeSection];
+  const copy = UI_COPY[locale].topBar;
+
+  const sectionMeta: Record<
+    ActiveSection,
+    { title: string; subtitle: string }
+  > = {
+    diagnostics: {
+      title: copy.diagnosticsTitle,
+      subtitle: copy.diagnosticsSub,
+    },
+    hardware: {
+      title: copy.hardwareTitle,
+      subtitle: copy.hardwareSub,
+    },
+    telemetry: {
+      title: copy.telemetryTitle,
+      subtitle: copy.telemetrySub,
+    },
+    startup: {
+      title: copy.startupTitle,
+      subtitle: copy.startupSub,
+    },
+    backups: {
+      title: copy.backupsTitle,
+      subtitle: copy.backupsSub,
+    },
+    tweaks: {
+      title: copy.tweaksTitle,
+      subtitle: copy.tweaksSub,
+    },
+  };
+
+  const meta = sectionMeta[activeSection];
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b-2 border-border bg-secondary-background px-6">
@@ -60,7 +71,7 @@ export function TopBar({
         <p className="truncate text-xs text-foreground/70">{meta.subtitle}</p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2.5">
         <Badge
           variant={scanning ? "default" : telemetryConnected ? "safe" : "neutral"}
           className="nb-mono hidden lg:inline-flex"
@@ -77,21 +88,34 @@ export function TopBar({
           />
           <span>
             {scanning
-              ? "ESCANEANDO"
+              ? copy.scanning
               : telemetryConnected
-                ? "STREAM 1 HZ"
-                : "STANDBY"}
+                ? copy.stream1Hz
+                : copy.standby}
           </span>
         </Badge>
 
         {scannedAt && (
           <div className="hidden border-l-2 border-border pl-3 text-right sm:block">
             <div className="text-[10.5px] font-heading font-bold uppercase text-foreground/65">
-              Último scan
+              {copy.lastScan}
             </div>
             <div className="nb-mono text-xs">{formatTimestamp(scannedAt)}</div>
           </div>
         )}
+
+        <Button
+          type="button"
+          variant="neutral"
+          size="xs"
+          onClick={onToggleLocale}
+          aria-label="Alternar idioma PT / EN"
+          title="PT-BR / EN-US"
+          className="nb-mono"
+        >
+          <Languages className="size-3.5" aria-hidden="true" />
+          <span>{locale.toUpperCase()}</span>
+        </Button>
 
         <Button
           type="button"
@@ -121,7 +145,7 @@ export function TopBar({
             className={`size-3.5 ${scanning ? "animate-spin" : ""}`}
             aria-hidden="true"
           />
-          <span>{scanning ? "Escaneando" : "Reescanear"}</span>
+          <span>{scanning ? copy.scanningBtn : copy.rescan}</span>
         </Button>
       </div>
     </header>

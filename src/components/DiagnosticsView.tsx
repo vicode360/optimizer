@@ -13,7 +13,9 @@ import {
   SlidersHorizontal,
   Zap,
 } from "lucide-react";
+import { localizeDiagnostic } from "../i18n";
 import type {
+  AppLocale,
   DiagnosticFinding,
   DiagnosticSeverity,
   SystemScanReport,
@@ -25,6 +27,7 @@ import {
   formatPercent,
   formatUptime,
 } from "../utils/format";
+import { BenchmarkPanel } from "./BenchmarkPanel";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
@@ -34,6 +37,7 @@ interface DiagnosticsViewProps {
   report: SystemScanReport;
   telemetry: TelemetryTick | null;
   scanning: boolean;
+  locale?: AppLocale;
   pendingRecommendedCount: number;
   onOpenTweaks: () => void;
   onQuickOptimize: () => void;
@@ -46,32 +50,32 @@ const SEVERITY_ORDER: Record<DiagnosticSeverity, number> = {
   optimal: 3,
 };
 
-function severityMeta(severity: DiagnosticSeverity) {
+function severityMeta(severity: DiagnosticSeverity, locale: AppLocale) {
   switch (severity) {
     case "critical":
       return {
-        label: "Crítico",
+        label: locale === "pt" ? "Crítico" : "Critical",
         badgeVariant: "advanced" as const,
         strip: "bg-chart-2",
         icon: AlertOctagon,
       };
     case "warning":
       return {
-        label: "Atenção",
+        label: locale === "pt" ? "Atenção" : "Warning",
         badgeVariant: "moderate" as const,
         strip: "bg-chart-3",
         icon: AlertTriangle,
       };
     case "info":
       return {
-        label: "Recomendação",
+        label: locale === "pt" ? "Recomendação" : "Recommendation",
         badgeVariant: "default" as const,
         strip: "bg-main",
         icon: Info,
       };
     case "optimal":
       return {
-        label: "Ótimo",
+        label: locale === "pt" ? "Ótimo" : "Optimal",
         badgeVariant: "safe" as const,
         strip: "bg-chart-4",
         icon: CheckCircle2,
@@ -83,15 +87,16 @@ export function DiagnosticsView({
   report,
   telemetry,
   scanning,
+  locale = "pt",
   pendingRecommendedCount,
   onOpenTweaks,
   onQuickOptimize,
 }: DiagnosticsViewProps) {
   const { hardware, peripherals, diagnostics } = report;
 
-  const sortedDiagnostics = [...diagnostics].sort(
-    (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
-  );
+  const sortedDiagnostics = [...diagnostics]
+    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
+    .map((d) => localizeDiagnostic(d, locale));
 
   const criticalCount = diagnostics.filter(
     (d) => d.severity === "critical"
@@ -119,12 +124,20 @@ export function DiagnosticsView({
     peripherals.monitors.find((m) => m.isPrimary) ?? peripherals.monitors[0];
 
   const statusHeadline = scanning
-    ? "Varredura ativa..."
+    ? locale === "pt"
+      ? "Varredura ativa..."
+      : "Active scan..."
     : criticalCount > 0
-      ? `${criticalCount} gargalo(s) crítico(s)`
+      ? locale === "pt"
+        ? `${criticalCount} gargalo(s) crítico(s)`
+        : `${criticalCount} critical bottleneck(s)`
       : warningCount > 0
-        ? `${warningCount} alerta(s) de desempenho`
-        : "Sistema estável";
+        ? locale === "pt"
+          ? `${warningCount} alerta(s) de desempenho`
+          : `${warningCount} performance warning(s)`
+        : locale === "pt"
+          ? "Sistema estável"
+          : "System optimal";
 
   const statusVariant = scanning
     ? "default"
@@ -165,16 +178,16 @@ export function DiagnosticsView({
             </div>
           </div>
 
-          <Button
-            type="button"
-            variant="success"
-            onClick={onQuickOptimize}
-          >
+          <Button type="button" variant="success" onClick={onQuickOptimize}>
             <Rocket className="size-4" aria-hidden="true" />
             <span>
               {pendingRecommendedCount > 0
-                ? `Otimização rápida (${pendingRecommendedCount})`
-                : "Abrir otimizações"}
+                ? locale === "pt"
+                  ? `Otimização rápida (${pendingRecommendedCount})`
+                  : `Quick Optimize (${pendingRecommendedCount})`
+                : locale === "pt"
+                  ? "Abrir otimizações"
+                  : "Open Tweaks"}
             </span>
           </Button>
         </div>
@@ -212,7 +225,7 @@ export function DiagnosticsView({
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 font-heading text-xs font-bold uppercase text-foreground/75">
                 <MemoryStick className="size-4" aria-hidden="true" />
-                <span>Memória RAM</span>
+                <span>{locale === "pt" ? "Memória RAM" : "Physical RAM"}</span>
               </span>
               <span className="nb-mono text-xl font-bold">
                 {formatPercent(memPercent)}
@@ -232,7 +245,8 @@ export function DiagnosticsView({
               {formatBytes(memUsed)} / {formatBytes(memTotal)}
             </div>
             <div className="nb-mono text-[11px] text-foreground/70">
-              Livre: {formatBytes(Math.max(0, memTotal - memUsed))}
+              {locale === "pt" ? "Livre" : "Free"}:{" "}
+              {formatBytes(Math.max(0, memTotal - memUsed))}
             </div>
           </div>
 
@@ -240,7 +254,7 @@ export function DiagnosticsView({
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 font-heading text-xs font-bold uppercase text-foreground/75">
                 <Monitor className="size-4" aria-hidden="true" />
-                <span>GPU e tela</span>
+                <span>{locale === "pt" ? "GPU e tela" : "GPU & Display"}</span>
               </span>
               <span className="nb-mono text-lg font-bold">
                 {primaryGpu && primaryGpu.vramBytes > 0
@@ -251,16 +265,23 @@ export function DiagnosticsView({
               </span>
             </div>
             <div className="truncate text-xs font-bold">
-              {primaryGpu ? primaryGpu.name : "GPU não detectada"}
+              {primaryGpu
+                ? primaryGpu.name
+                : locale === "pt"
+                  ? "GPU não detectada"
+                  : "No GPU detected"}
             </div>
             <div className="nb-mono flex items-center justify-between text-[11px] text-foreground/70">
               <span className="truncate">
                 {primaryMonitor
                   ? `${primaryMonitor.width}×${primaryMonitor.height}`
-                  : "Sem display"}
+                  : "—"}
               </span>
               {primaryMonitor && (
-                <Badge variant="neutral" className="nb-mono px-1.5 py-0 text-[10.5px]">
+                <Badge
+                  variant="neutral"
+                  className="nb-mono px-1.5 py-0 text-[10.5px]"
+                >
                   {primaryMonitor.refreshRateHz} Hz
                 </Badge>
               )}
@@ -271,9 +292,12 @@ export function DiagnosticsView({
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 font-heading text-xs font-bold uppercase text-foreground/75">
                 <Network className="size-4" aria-hidden="true" />
-                <span>Rede</span>
+                <span>{locale === "pt" ? "Rede" : "Network"}</span>
               </span>
-              <Badge variant="neutral" className="nb-mono px-1.5 py-0 text-[10.5px]">
+              <Badge
+                variant="neutral"
+                className="nb-mono px-1.5 py-0 text-[10.5px]"
+              >
                 {hardware.networks.length} NIC
               </Badge>
             </div>
@@ -303,14 +327,17 @@ export function DiagnosticsView({
         </div>
       </Card>
 
+      <BenchmarkPanel locale={locale} />
+
       <section aria-label="Achados do diagnóstico" className="space-y-3">
         <div>
           <h2 className="font-heading text-base font-bold">
-            Análise do sistema
+            {locale === "pt" ? "Análise do sistema" : "System Analysis"}
           </h2>
           <p className="text-xs text-foreground/70">
-            {sortedDiagnostics.length} verificações concluídas com base na
-            leitura real do Registro, energia e hardware
+            {locale === "pt"
+              ? `${sortedDiagnostics.length} verificações concluídas com base na leitura real do Registro, energia e hardware`
+              : `${sortedDiagnostics.length} checks completed based on live Registry, power, and hardware state`}
           </p>
         </div>
 
@@ -320,6 +347,7 @@ export function DiagnosticsView({
               <DiagnosticRow
                 key={finding.id}
                 finding={finding}
+                locale={locale}
                 onOpenTweaks={onOpenTweaks}
               />
             ))}
@@ -332,12 +360,14 @@ export function DiagnosticsView({
 
 function DiagnosticRow({
   finding,
+  locale,
   onOpenTweaks,
 }: {
   finding: DiagnosticFinding;
+  locale: AppLocale;
   onOpenTweaks: () => void;
 }) {
-  const meta = severityMeta(finding.severity);
+  const meta = severityMeta(finding.severity, locale);
   const Icon = meta.icon;
 
   return (
@@ -382,7 +412,7 @@ function DiagnosticRow({
           onClick={onOpenTweaks}
         >
           <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-          <span>Ver tweaks</span>
+          <span>{locale === "pt" ? "Ver tweaks" : "View tweaks"}</span>
         </Button>
       )}
     </div>

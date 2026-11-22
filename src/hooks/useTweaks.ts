@@ -20,6 +20,7 @@ export interface UseTweaksResult {
   items: TweakItem[];
   selectedIds: string[];
   sessionLabel: string;
+  createRestorePoint: boolean;
   loading: boolean;
   busy: boolean;
   progress: TweakProgressEvent | null;
@@ -30,9 +31,14 @@ export interface UseTweaksResult {
   toggleSelect: (id: string) => void;
   setSelected: (ids: string[]) => void;
   setSessionLabel: (label: string) => void;
+  setCreateRestorePoint: (enabled: boolean) => void;
   clearSelection: () => void;
   applySelected: (sessionLabel?: string) => Promise<ApplyTweaksResult | null>;
   revertSession: (sessionId: string) => Promise<RevertSessionResult | null>;
+  revertSingleTweak: (
+    tweakId: string,
+    sessionId?: string
+  ) => Promise<RevertSessionResult | null>;
   revertAllSessions: (
     sessionIds: string[]
   ) => Promise<RevertSessionResult | null>;
@@ -42,6 +48,7 @@ export function useTweaks(options?: UseTweaksOptions): UseTweaksResult {
   const [items, setItems] = useState<TweakItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sessionLabel, setSessionLabelState] = useState("");
+  const [createRestorePoint, setCreateRestorePointState] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<TweakProgressEvent | null>(null);
@@ -55,6 +62,8 @@ export function useTweaks(options?: UseTweaksOptions): UseTweaksResult {
   const refreshReqIdRef = useRef(0);
   const selectedIdsRef = useRef<string[]>(selectedIds);
   selectedIdsRef.current = selectedIds;
+  const createRestorePointRef = useRef(createRestorePoint);
+  createRestorePointRef.current = createRestorePoint;
 
   const onMutationCompleteRef = useRef(options?.onMutationComplete);
   onMutationCompleteRef.current = options?.onMutationComplete;
@@ -137,6 +146,11 @@ export function useTweaks(options?: UseTweaksOptions): UseTweaksResult {
     setSessionLabelState(label);
   }, []);
 
+  const setCreateRestorePoint = useCallback((enabled: boolean) => {
+    if (busyRef.current) return;
+    setCreateRestorePointState(enabled);
+  }, []);
+
   const clearSelection = useCallback(() => {
     if (busyRef.current) return;
     setSelectedIds([]);
@@ -156,12 +170,17 @@ export function useTweaks(options?: UseTweaksOptions): UseTweaksResult {
       setProgress(null);
 
       try {
-        const result = await tauriClient.applyTweaks(ids, overrideLabel);
+        const result = await tauriClient.applyTweaks(
+          ids,
+          overrideLabel,
+          createRestorePointRef.current
+        );
         setLastApplyResult(result);
         const failedIds = new Set(result.failures.map((f) => f.tweakId));
         setSelectedIds((prev) => prev.filter((id) => failedIds.has(id)));
         if (result.failures.length === 0) {
           setSessionLabelState("");
+          setCreateRestorePointState(false);
         }
         await refresh();
         if (onMutationCompleteRef.current) {
@@ -192,6 +211,36 @@ export function useTweaks(options?: UseTweaksOptions): UseTweaksResult {
 
       try {
         const result = await tauriClient.revertBackupSession(sessionId);
+        setLastRevertResult(result);
+        await refresh();
+        if (onMutationCompleteRef.current) {
+          await onMutationCompleteRef.current();
+        }
+        return result;
+      } catch (err) {
+        setError(normalizeAppError(err));
+        return null;
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    },
+    [refresh]
+  );
+
+  const revertSingleTweak = useCallback(
+    async (tweakId: string, sessionId?: string) => {
+      if (busyRef.current) return null;
+
+      busyRef.current = true;
+      setBusy(true);
+      setError(null);
+      setLastApplyResult(null);
+      setLastRevertResult(null);
+      setProgress(null);
+
+      try {
+        const result = await tauriClient.revertSingleTweak(tweakId, sessionId);
         setLastRevertResult(result);
         await refresh();
         if (onMutationCompleteRef.current) {
@@ -286,6 +335,7 @@ export function useTweaks(options?: UseTweaksOptions): UseTweaksResult {
       items,
       selectedIds,
       sessionLabel,
+      createRestorePoint,
       loading,
       busy,
       progress,
@@ -296,15 +346,18 @@ export function useTweaks(options?: UseTweaksOptions): UseTweaksResult {
       toggleSelect,
       setSelected,
       setSessionLabel,
+      setCreateRestorePoint,
       clearSelection,
       applySelected,
       revertSession,
+      revertSingleTweak,
       revertAllSessions,
     }),
     [
       items,
       selectedIds,
       sessionLabel,
+      createRestorePoint,
       loading,
       busy,
       progress,
@@ -315,9 +368,11 @@ export function useTweaks(options?: UseTweaksOptions): UseTweaksResult {
       toggleSelect,
       setSelected,
       setSessionLabel,
+      setCreateRestorePoint,
       clearSelection,
       applySelected,
       revertSession,
+      revertSingleTweak,
       revertAllSessions,
     ]
   );

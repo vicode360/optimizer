@@ -29,10 +29,10 @@ use self::services::{
     SERVICE_START_AUTO,
 };
 use self::system_ops::{
-    is_plan_high_performance, query_active_dns_adapters, query_netsh_tcp_global_map,
-    revert_dns_target, revert_power_plan, set_fsutil_behavior, set_hibernation,
-    set_netsh_ip_global, set_netsh_supplemental_provider, set_netsh_tcp_global,
-    set_power_setting_indices, ActiveDnsAdapter, SystemSpecs,
+    create_system_restore_point, is_plan_high_performance, query_active_dns_adapters_fast,
+    query_netsh_tcp_global_map, revert_dns_target, revert_power_plan, set_fsutil_behavior,
+    set_hibernation, set_netsh_ip_global, set_netsh_supplemental_provider, set_netsh_tcp_global,
+    set_power_setting_indices, set_scheduled_task_enabled, ActiveDnsAdapter, SystemSpecs,
 };
 
 pub const TWEAK_PROGRESS_EVENT: &str = "tweak://progress";
@@ -110,6 +110,8 @@ pub struct ApplyTweaksResult {
     pub backup_path: String,
     pub applied_ids: Vec<String>,
     pub failures: Vec<TweakOperationFailure>,
+    pub restore_point_created: bool,
+    pub restore_point_warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -135,15 +137,44 @@ pub struct TweakEvalContext {
 
 impl TweakEvalContext {
     pub fn collect() -> Self {
-        let specs = SystemSpecs::detect();
-        let tcp_global = query_netsh_tcp_global_map();
-        let active_plan = read_active_power_plan();
+        let (specs, tcp_global, active_plan, reg_info) = std::thread::scope(|s| {
+            let h_specs = s.spawn(SystemSpecs::detect);
+            let h_tcp = s.spawn(query_netsh_tcp_global_map);
+            let h_plan = s.spawn(read_active_power_plan);
+            let h_reg = s.spawn(|| {
+                (
+                    read_windows_build_number(),
+                    pci_display_msi_subkeys(),
+                    nic_class_subkeys(),
+                    usb_hid_power_subkeys(),
+                    query_active_dns_adapters_fast(),
+                )
+            });
+
+            (
+                h_specs.join().unwrap_or_else(|_| SystemSpecs::detect()),
+                h_tcp.join().unwrap_or_default(),
+                h_plan.join().unwrap_or_else(|_| read_active_power_plan()),
+                h_reg.join().unwrap_or_else(|_| {
+                    (
+                        read_windows_build_number(),
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                    )
+                }),
+            )
+        });
+
         let high_perf_active = is_plan_high_performance(&active_plan);
-        let windows_build = read_windows_build_number();
-        let pci_display_subkeys = pci_display_msi_subkeys();
-        let nic_subkeys = nic_class_subkeys();
-        let usb_hid_subkeys = usb_hid_power_subkeys();
-        let active_dns_adapters = query_active_dns_adapters().unwrap_or_default();
+        let (
+            windows_build,
+            pci_display_subkeys,
+            nic_subkeys,
+            usb_hid_subkeys,
+            active_dns_adapters,
+        ) = reg_info;
 
         Self {
             specs,
@@ -165,6 +196,9 @@ pub trait Tweak: Send + Sync {
     fn category(&self) -> TweakCategory;
     fn description(&self) -> &'static str;
     fn technical_detail(&self) -> String;
+    fn technical_detail_with_ctx(&self, _ctx: &TweakEvalContext) -> String {
+        self.technical_detail()
+    }
     fn benchmark_note(&self) -> &'static str;
     fn impact(&self) -> TweakImpact;
     fn risk(&self) -> TweakRisk;
@@ -485,7 +519,7 @@ pub fn list_tweaks() -> AppResult<Vec<TweakItem>> {
                 id: tweak.id().to_string(),
                 title: tweak.name().to_string(),
                 description: tweak.description().to_string(),
-                technical_detail: tweak.technical_detail(),
+                technical_detail: tweak.technical_detail_with_ctx(&ctx),
                 benchmark_note: tweak.benchmark_note().to_string(),
                 category: tweak.category(),
                 impact: tweak.impact(),
@@ -533,6 +567,7 @@ pub fn apply_tweaks(
     app: &AppHandle,
     tweak_ids: Vec<String>,
     session_label: Option<String>,
+    create_restore_point: bool,
 ) -> AppResult<ApplyTweaksResult> {
     require_admin()?;
 
@@ -553,6 +588,31 @@ pub fn apply_tweaks(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| format!("Lote de otimização ({total} tweaks)"));
+
+    let mut restore_point_created = false;
+    let mut restore_point_warning = None;
+    if create_restore_point {
+        emit_progress(
+            app,
+            TweakProgressEvent {
+                phase: "backingUp".into(),
+                current: 0,
+                total,
+                tweak_id: None,
+                tweak_title: None,
+                message: "Criando Ponto de Restauração do Windows (VSS)...".into(),
+                session_id: None,
+            },
+        );
+        match create_system_restore_point(&format!("Optimizer - {label}")) {
+            Ok(()) => restore_point_created = true,
+            Err(err) => {
+                restore_point_warning = Some(format!(
+                    "Aviso VSS: não foi possível criar o Ponto de Restauração do Windows ({err}). O snapshot atômico JSON continuará normalmente."
+                ));
+            }
+        }
+    }
 
     let backup_dir = backup::default_backup_dir()?;
     let mut session = backup::BackupSession {
@@ -605,6 +665,7 @@ pub fn apply_tweaks(
             tweak_id: tweak.id().to_string(),
             tweak_title: tweak.name().to_string(),
             targets: targets.clone(),
+            restored_at: None,
         });
 
         // Persiste o backup atomicamente em disco ANTES de executar qualquer mutação.
@@ -712,6 +773,8 @@ pub fn apply_tweaks(
         },
         applied_ids,
         failures,
+        restore_point_created,
+        restore_point_warning,
     })
 }
 
@@ -768,6 +831,10 @@ fn revert_single_target(target: &BackupTarget) -> AppResult<()> {
             was_dhcp,
             original_servers,
         } => revert_dns_target(interface_alias, *was_dhcp, original_servers),
+        BackupTarget::ScheduledTaskState {
+            task_path,
+            was_enabled,
+        } => set_scheduled_task_enabled(task_path, *was_enabled),
         BackupTarget::SnapshotNote { .. } => Ok(()),
     }
 }
@@ -777,12 +844,18 @@ pub fn revert_session(app: &AppHandle, session_id: String) -> AppResult<RevertSe
 
     let backup_dir = backup::default_backup_dir()?;
     let session = backup::load_session_from(&backup_dir, &session_id)?;
-    let total = session.entries.len();
+    let pending_entries: Vec<&BackupEntry> = session
+        .entries
+        .iter()
+        .rev()
+        .filter(|e| e.restored_at.is_none())
+        .collect();
+    let total = pending_entries.len();
 
     let mut reverted_count = 0usize;
     let mut failures = Vec::new();
 
-    for (idx, entry) in session.entries.iter().rev().enumerate() {
+    for (idx, entry) in pending_entries.into_iter().enumerate() {
         emit_progress(
             app,
             TweakProgressEvent {
@@ -810,6 +883,7 @@ pub fn revert_session(app: &AppHandle, session_id: String) -> AppResult<RevertSe
 
         if !entry_failed {
             reverted_count += 1;
+            let _ = backup::mark_entry_restored_in(&backup_dir, &session.session_id, &entry.tweak_id);
         }
     }
 
@@ -839,6 +913,96 @@ pub fn revert_session(app: &AppHandle, session_id: String) -> AppResult<RevertSe
                     "{reverted_count} restaurado(s), {} falha(s) durante a reversão.",
                     failures.len()
                 )
+            },
+            session_id: Some(session.session_id.clone()),
+        },
+    );
+
+    Ok(RevertSessionResult {
+        session_id: session.session_id,
+        reverted_count,
+        failures,
+        marked_restored,
+    })
+}
+
+pub fn revert_single_tweak(
+    app: &AppHandle,
+    session_id: Option<String>,
+    tweak_id: String,
+) -> AppResult<RevertSessionResult> {
+    require_admin()?;
+
+    let backup_dir = backup::default_backup_dir()?;
+    let target_session_id = match session_id.filter(|s| !s.trim().is_empty()) {
+        Some(id) => id,
+        None => backup::find_latest_active_session_for_tweak_in(&backup_dir, &tweak_id)?
+            .ok_or_else(|| {
+                AppError::BackupError(format!(
+                    "Nenhuma sessão de backup ativa encontrada para o item '{tweak_id}'."
+                ))
+            })?,
+    };
+
+    let session = backup::load_session_from(&backup_dir, &target_session_id)?;
+    let entry = session
+        .entries
+        .iter()
+        .find(|e| e.tweak_id == tweak_id)
+        .ok_or_else(|| {
+            AppError::BackupError(format!(
+                "O item '{tweak_id}' não existe na sessão '{target_session_id}'."
+            ))
+        })?;
+
+    emit_progress(
+        app,
+        TweakProgressEvent {
+            phase: "reverting".into(),
+            current: 1,
+            total: 1,
+            tweak_id: Some(entry.tweak_id.clone()),
+            tweak_title: Some(entry.tweak_title.clone()),
+            message: format!("Revertendo {}...", entry.tweak_title),
+            session_id: Some(session.session_id.clone()),
+        },
+    );
+
+    let mut failures = Vec::new();
+    for target in entry.targets.iter().rev() {
+        if let Err(err) = revert_single_target(target) {
+            failures.push(TweakOperationFailure {
+                tweak_id: entry.tweak_id.clone(),
+                tweak_title: entry.tweak_title.clone(),
+                error: err.to_string(),
+            });
+        }
+    }
+
+    let (reverted_count, marked_restored) = if failures.is_empty() {
+        let (_, all_done) =
+            backup::mark_entry_restored_in(&backup_dir, &session.session_id, &tweak_id)?;
+        (1usize, all_done)
+    } else {
+        (0usize, false)
+    };
+
+    emit_progress(
+        app,
+        TweakProgressEvent {
+            phase: if failures.is_empty() {
+                "completed".into()
+            } else {
+                "failed".into()
+            },
+            current: 1,
+            total: 1,
+            tweak_id: Some(entry.tweak_id.clone()),
+            tweak_title: Some(entry.tweak_title.clone()),
+            message: if failures.is_empty() {
+                format!("{} restaurado para o estado original.", entry.tweak_title)
+            } else {
+                format!("Falha ao reverter {}.", entry.tweak_title)
             },
             session_id: Some(session.session_id.clone()),
         },

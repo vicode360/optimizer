@@ -65,6 +65,11 @@ describe("BackupsView and target descriptions", () => {
         originalServers: [],
       },
       {
+        targetType: "scheduledTaskState",
+        taskPath: "\\Microsoft\\Windows\\CEIP\\Consolidator",
+        wasEnabled: true,
+      },
+      {
         targetType: "snapshotNote",
         description: "Standby RAM",
         originalValue: "10 GiB",
@@ -75,6 +80,7 @@ describe("BackupsView and target descriptions", () => {
     expect(descriptions[7]).toBe(
       "netsh int ipv4 global loopbacklargemtu -> original=enable"
     );
+    expect(descriptions[10]).toContain("Tarefa Agendada");
     expect(descriptions.every((d) => d.length > 0)).toBe(true);
   });
 

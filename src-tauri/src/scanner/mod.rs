@@ -1,3 +1,4 @@
+pub mod benchmark;
 pub mod diagnostics;
 pub mod hardware;
 pub mod peripherals;

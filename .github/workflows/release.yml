@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: false
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    name: Build & Publish Windows Release (.exe & .msi)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run verification suite
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+          cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      - name: Build Tauri Windows Release (.exe setup & .msi)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: "Optimizer ${{ github.event.inputs.tag || github.ref_name }}"
+          releaseBody: |
+            ## Optimizer ${{ github.event.inputs.tag || github.ref_name }} — Windows x64 Release
+
+            ### Downloads
+            - **`Optimizer_*_x64-setup.exe`** — Standard Windows NSIS Installer (Recommended)
+            - **`Optimizer-portable-x64.exe`** — Standalone Portable Executable (No installation required)
+            - **`Optimizer_*_x64_en-US.msi`** — Windows MSI Package
+            - **`SHA256SUMS.txt`** — SHA-256 integrity checksums for all binaries
+          releaseDraft: false
+          prerelease: false
+
+      - name: Attach Portable .exe and SHA256SUMS.txt to GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REL_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          $portablePath = "Optimizer-portable-x64.exe"
+          Copy-Item "src-tauri/target/release/optimizer.exe" $portablePath -Force
+
+          $files = @($portablePath)
+          $files += Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -Include "*.exe", "*.msi" | Select-Object -ExpandProperty FullName
+
+          $hashes = foreach ($f in $files) {
+            $h = Get-FileHash -Path $f -Algorithm SHA256
+            "$($h.Hash.ToLower())  $(Split-Path $f -Leaf)"
+          }
+          $hashes | Set-Content -Path "SHA256SUMS.txt" -Encoding UTF8
+
+          gh release upload $env:REL_TAG $portablePath "SHA256SUMS.txt" --clobber

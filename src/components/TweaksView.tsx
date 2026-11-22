@@ -22,8 +22,10 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { localizeTweak } from "../i18n";
 import type {
   AppError,
+  AppLocale,
   ApplyTweaksResult,
   BackupSessionSummary,
   DiagnosticFinding,
@@ -52,6 +54,8 @@ interface TweaksViewProps {
   items: TweakItem[];
   selectedIds: string[];
   sessionLabel: string;
+  createRestorePoint?: boolean;
+  locale?: AppLocale;
   activeBackupSessions: BackupSessionSummary[];
   loading: boolean;
   busy: boolean;
@@ -66,8 +70,10 @@ interface TweaksViewProps {
   onToggleSelect: (id: string) => void;
   onSetSelected: (ids: string[]) => void;
   onSessionLabelChange: (label: string) => void;
+  onCreateRestorePointChange?: (enabled: boolean) => void;
   onClearSelection: () => void;
   onApplySelected: (sessionLabel?: string) => void;
+  onRevertSingleTweak?: (tweakId: string) => void;
   onRevertAllActive: () => void;
   onRequestElevation: () => void;
   onInspectBackupSession: (sessionId: string) => void;
@@ -78,15 +84,15 @@ type RiskFilter = "all" | TweakRisk;
 
 const CATEGORY_META: Record<
   TweakCategory,
-  { label: string; icon: typeof Cpu }
+  { labelPt: string; labelEn: string; icon: typeof Cpu }
 > = {
-  gaming: { label: "CPU & Gaming", icon: Cpu },
-  gpu: { label: "GPU & DirectX", icon: Monitor },
-  network: { label: "Rede & TCP/IP", icon: Globe },
-  power: { label: "Energia & Disco", icon: Zap },
-  input: { label: "Periféricos", icon: Keyboard },
-  debloat: { label: "Debloat", icon: SlidersHorizontal },
-  security: { label: "Segurança", icon: Lock },
+  gaming: { labelPt: "CPU & Gaming", labelEn: "CPU & Gaming", icon: Cpu },
+  gpu: { labelPt: "GPU & DirectX", labelEn: "GPU & DirectX", icon: Monitor },
+  network: { labelPt: "Rede & TCP/IP", labelEn: "Network & TCP/IP", icon: Globe },
+  power: { labelPt: "Energia & Disco", labelEn: "Power & Storage", icon: Zap },
+  input: { labelPt: "Periféricos", labelEn: "Peripherals", icon: Keyboard },
+  debloat: { labelPt: "Debloat", labelEn: "Debloat", icon: SlidersHorizontal },
+  security: { labelPt: "Segurança", labelEn: "Security", icon: Lock },
 };
 
 const COMPETITIVE_SAFE_PRESET_IDS = [
@@ -153,14 +159,14 @@ function riskBadge(risk: TweakRisk): {
   }
 }
 
-function impactLabel(impact: TweakImpact): string {
+function impactLabel(impact: TweakImpact, locale: AppLocale): string {
   switch (impact) {
     case "high":
-      return "Alto impacto";
+      return locale === "pt" ? "Alto impacto" : "High impact";
     case "medium":
-      return "Médio impacto";
+      return locale === "pt" ? "Médio impacto" : "Medium impact";
     case "low":
-      return "Baixo impacto";
+      return locale === "pt" ? "Baixo impacto" : "Low impact";
   }
 }
 
@@ -168,6 +174,8 @@ export const TweaksView = memo(function TweaksView({
   items,
   selectedIds,
   sessionLabel,
+  createRestorePoint = false,
+  locale = "pt",
   activeBackupSessions,
   loading,
   busy,
@@ -182,8 +190,10 @@ export const TweaksView = memo(function TweaksView({
   onToggleSelect,
   onSetSelected,
   onSessionLabelChange,
+  onCreateRestorePointChange,
   onClearSelection,
   onApplySelected,
+  onRevertSingleTweak,
   onRevertAllActive,
   onRequestElevation,
   onInspectBackupSession,
@@ -194,6 +204,11 @@ export const TweaksView = memo(function TweaksView({
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [confirmRevertAll, setConfirmRevertAll] = useState(false);
 
+  const localizedItems = useMemo(
+    () => items.map((item) => localizeTweak(item, locale)),
+    [items, locale]
+  );
+
   const recommendedIds = useMemo(
     () => new Set(diagnostics.flatMap((d) => d.recommendedTweakIds)),
     [diagnostics]
@@ -201,9 +216,19 @@ export const TweaksView = memo(function TweaksView({
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
+  const hasAdvancedOrSecuritySelected = useMemo(
+    () =>
+      items.some(
+        (item) =>
+          selectedSet.has(item.id) &&
+          (item.risk === "advanced" || item.category === "security")
+      ),
+    [items, selectedSet]
+  );
+
   const visibleItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return items.filter((item) => {
+    return localizedItems.filter((item) => {
       if (categoryFilter !== "all" && item.category !== categoryFilter) {
         return false;
       }
@@ -219,7 +244,7 @@ export const TweaksView = memo(function TweaksView({
       }
       return true;
     });
-  }, [items, categoryFilter, riskFilter, searchQuery]);
+  }, [localizedItems, categoryFilter, riskFilter, searchQuery]);
 
   const isAdmin = privilege?.isAdmin ?? false;
   const canApply = isAdmin && selectedIds.length > 0 && !busy;
@@ -279,18 +304,25 @@ export const TweaksView = memo(function TweaksView({
     count: number;
   }> = useMemo(
     () => [
-      { id: "all", label: "Todas", count: items.length },
+      {
+        id: "all",
+        label: locale === "pt" ? "Todas" : "All",
+        count: items.length,
+      },
       ...(Object.keys(CATEGORY_META) as TweakCategory[]).map((cat) => ({
         id: cat,
-        label: CATEGORY_META[cat].label,
+        label:
+          locale === "pt"
+            ? CATEGORY_META[cat].labelPt
+            : CATEGORY_META[cat].labelEn,
         count: items.filter((item) => item.category === cat).length,
       })),
     ],
-    [items]
+    [items, locale]
   );
 
   const riskTabs: Array<{ id: RiskFilter; label: string }> = [
-    { id: "all", label: "Todos" },
+    { id: "all", label: locale === "pt" ? "Todos" : "All" },
     { id: "safe", label: "SAFE" },
     { id: "moderate", label: "MODERATE" },
     { id: "advanced", label: "ADVANCED" },
@@ -432,8 +464,11 @@ export const TweaksView = memo(function TweaksView({
           </div>
 
           <div className="flex flex-col gap-3 border-t-2 border-border pt-3.5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-2.5 text-xs">
-              <Badge variant={selectedIds.length > 0 ? "default" : "neutral"} className="nb-mono">
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <Badge
+                variant={selectedIds.length > 0 ? "default" : "neutral"}
+                className="nb-mono"
+              >
                 {selectedIds.length} selecionado(s)
               </Badge>
               {selectedIds.length > 0 && (
@@ -446,6 +481,27 @@ export const TweaksView = memo(function TweaksView({
                 >
                   Limpar seleção
                 </Button>
+              )}
+
+              {onCreateRestorePointChange && (
+                <div className="inline-flex items-center gap-2 rounded-base border-2 border-border bg-background px-2.5 py-1">
+                  <Checkbox
+                    checked={createRestorePoint}
+                    disabled={busy}
+                    onCheckedChange={onCreateRestorePointChange}
+                    aria-label="Criar Ponto de Restauração do Windows (VSS)"
+                  />
+                  <span className="font-heading text-xs font-bold">
+                    {locale === "pt"
+                      ? "Ponto de Restauração (VSS)"
+                      : "Windows Restore Point (VSS)"}
+                  </span>
+                  {hasAdvancedOrSecuritySelected && (
+                    <Badge variant="moderate">
+                      {locale === "pt" ? "Recomendado" : "Suggested"}
+                    </Badge>
+                  )}
+                </div>
               )}
             </div>
 
@@ -523,12 +579,20 @@ export const TweaksView = memo(function TweaksView({
             {lastApplyResult.failures.length > 0
               ? ` · ${lastApplyResult.failures.length} falha(s)`
               : " com snapshot atômico salvo"}
+            {lastApplyResult.restorePointCreated
+              ? " + Ponto de Restauração VSS criado"
+              : ""}
           </AlertTitle>
           <AlertDescription className="flex w-full flex-wrap items-start justify-between gap-3">
             <div className="space-y-1 text-xs">
               {lastApplyResult.backupPath && (
                 <div className="nb-mono break-all">
                   Backup: {lastApplyResult.backupPath}
+                </div>
+              )}
+              {lastApplyResult.restorePointWarning && (
+                <div className="font-medium">
+                  {lastApplyResult.restorePointWarning}
                 </div>
               )}
               {lastApplyResult.failures.length > 0 && (
@@ -698,6 +762,8 @@ export const TweaksView = memo(function TweaksView({
               const isExpanded = Boolean(expandedIds[item.id]);
               const catMeta = CATEGORY_META[item.category];
               const CatIcon = catMeta.icon;
+              const catLabel =
+                locale === "pt" ? catMeta.labelPt : catMeta.labelEn;
               const risk = riskBadge(item.risk);
 
               return (
@@ -734,11 +800,19 @@ export const TweaksView = memo(function TweaksView({
                           </button>
 
                           <Badge variant={item.applied ? "safe" : "neutral"}>
-                            {item.applied ? "Aplicado" : "Disponível"}
+                            {item.applied
+                              ? locale === "pt"
+                                ? "Aplicado"
+                                : "Applied"
+                              : locale === "pt"
+                                ? "Disponível"
+                                : "Available"}
                           </Badge>
 
                           {isRecommended && !item.applied && (
-                            <Badge variant="default">Recomendado</Badge>
+                            <Badge variant="default">
+                              {locale === "pt" ? "Recomendado" : "Recommended"}
+                            </Badge>
                           )}
 
                           <Badge variant={risk.variant} className="nb-mono">
@@ -746,16 +820,44 @@ export const TweaksView = memo(function TweaksView({
                           </Badge>
                         </div>
 
-                        <CollapsibleTrigger className="inline-flex shrink-0 items-center gap-1 rounded-base border-2 border-border bg-background px-2.5 py-1 text-xs font-heading font-bold transition-colors hover:bg-main hover:text-main-foreground">
-                          <Terminal className="size-3.5" aria-hidden="true" />
-                          <span>Detalhes</span>
-                          <ChevronDown
-                            className={`size-3.5 transition-transform duration-150 ${
-                              isExpanded ? "rotate-180" : ""
-                            }`}
-                            aria-hidden="true"
-                          />
-                        </CollapsibleTrigger>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {item.applied &&
+                            item.reversible &&
+                            onRevertSingleTweak &&
+                            activeBackupSessions.length > 0 && (
+                              <Button
+                                type="button"
+                                variant="neutral"
+                                size="xs"
+                                disabled={!isAdmin || busy}
+                                onClick={() => onRevertSingleTweak(item.id)}
+                                title={
+                                  locale === "pt"
+                                    ? "Reverter este tweak a partir do snapshot mais recente"
+                                    : "Revert this tweak from the most recent active snapshot"
+                                }
+                              >
+                                <RotateCcw
+                                  className="size-3"
+                                  aria-hidden="true"
+                                />
+                                <span>
+                                  {locale === "pt" ? "Reverter" : "Revert"}
+                                </span>
+                              </Button>
+                            )}
+
+                          <CollapsibleTrigger className="inline-flex shrink-0 items-center gap-1 rounded-base border-2 border-border bg-background px-2.5 py-1 text-xs font-heading font-bold transition-colors hover:bg-main hover:text-main-foreground">
+                            <Terminal className="size-3.5" aria-hidden="true" />
+                            <span>Detalhes</span>
+                            <ChevronDown
+                              className={`size-3.5 transition-transform duration-150 ${
+                                isExpanded ? "rotate-180" : ""
+                              }`}
+                              aria-hidden="true"
+                            />
+                          </CollapsibleTrigger>
+                        </div>
                       </div>
 
                       <p className="mt-1.5 max-w-3xl text-xs leading-relaxed text-foreground/80">
@@ -765,10 +867,10 @@ export const TweaksView = memo(function TweaksView({
                       <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-foreground/75">
                         <span className="inline-flex items-center gap-1 font-heading font-bold">
                           <CatIcon className="size-3.5" aria-hidden="true" />
-                          {catMeta.label}
+                          {catLabel}
                         </span>
                         <span className="font-heading font-bold">
-                          {impactLabel(item.impact)}
+                          {impactLabel(item.impact, locale)}
                         </span>
                         {item.hardwareNote && (
                           <span className="text-foreground/85">

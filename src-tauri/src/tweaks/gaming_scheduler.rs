@@ -53,6 +53,14 @@ impl Tweak for DynamicSvcHostSplitTweak {
         )
     }
 
+    fn technical_detail_with_ctx(&self, ctx: &TweakEvalContext) -> String {
+        let kb = recommended_svchost_split_kb(ctx.specs.total_ram_kb);
+        format!(
+            r"HKLM\SYSTEM\CurrentControlSet\Control :: SvcHostSplitThresholdInKB -> REG_DWORD={kb} (RAM detectada: {:.1} GiB)",
+            ctx.specs.total_ram_gb
+        )
+    }
+
     fn benchmark_note(&self) -> &'static str {
         "AtlasOS / WinUtil: reduz 40–70 processos svchost.exe redundantes em sistemas com 16–64 GiB de RAM, economizando handles e memória de tabela de páginas."
     }

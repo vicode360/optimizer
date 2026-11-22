@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type {
   AppError,
+  AppLocale,
   BackupSession,
   BackupSessionSummary,
   BackupTarget,
@@ -33,6 +34,7 @@ interface BackupsViewProps {
   loadingSession: boolean;
   busy: boolean;
   elevating?: boolean;
+  locale?: AppLocale;
   progress: TweakProgressEvent | null;
   lastRevertResult: RevertSessionResult | null;
   error: AppError | null;
@@ -41,6 +43,7 @@ interface BackupsViewProps {
   onRefresh: () => void;
   onInspectSession: (sessionId: string) => void;
   onRevertSession: (sessionId: string) => void;
+  onRevertSingleTweak?: (tweakId: string, sessionId: string) => void;
   onRequestElevation: () => void;
 }
 
@@ -52,6 +55,7 @@ export const BackupsView = memo(function BackupsView({
   loadingSession,
   busy,
   elevating = false,
+  locale = "pt",
   progress,
   lastRevertResult,
   error,
@@ -60,6 +64,7 @@ export const BackupsView = memo(function BackupsView({
   onRefresh,
   onInspectSession,
   onRevertSession,
+  onRevertSingleTweak,
   onRequestElevation,
 }: BackupsViewProps) {
   const [confirmSessionId, setConfirmSessionId] = useState<string | null>(null);
@@ -93,12 +98,14 @@ export const BackupsView = memo(function BackupsView({
               </div>
               <div>
                 <h2 className="font-heading text-base font-bold">
-                  Cofre de snapshots atômicos
+                  {locale === "pt"
+                    ? "Cofre de snapshots atômicos"
+                    : "Atomic Snapshot Vault"}
                 </h2>
                 <p className="mt-1 max-w-2xl text-xs leading-relaxed text-foreground/80">
-                  Toda mutação de Registro, Serviços, Plano de Energia, TCP/IP
-                  ou NTFS grava primeiro o estado original em disco antes de
-                  alterar o Windows.
+                  {locale === "pt"
+                    ? "Toda mutação de Registro, Serviços, Plano de Energia, TCP/IP, Inicialização ou NTFS grava primeiro o estado original em disco antes de alterar o Windows."
+                    : "Every Registry, Service, Power Plan, TCP/IP, Startup, or NTFS mutation first persists its exact pre-mutation state to disk before modifying Windows."}
                 </p>
                 <div className="nb-mono mt-2.5 inline-block break-all rounded-base border-2 border-border bg-background px-3 py-1 text-xs font-bold">
                   {directory ?? "Resolvendo %AppData%/optimizer/backups..."}
@@ -117,7 +124,7 @@ export const BackupsView = memo(function BackupsView({
                 className={`size-3.5 ${loading ? "animate-spin" : ""}`}
                 aria-hidden="true"
               />
-              <span>Atualizar lista</span>
+              <span>{locale === "pt" ? "Atualizar lista" : "Refresh list"}</span>
             </Button>
           </div>
 
@@ -128,12 +135,15 @@ export const BackupsView = memo(function BackupsView({
                 <span>
                   Token:{" "}
                   {privilegeLoading
-                    ? "Verificando..."
+                    ? locale === "pt"
+                      ? "Verificando..."
+                      : "Checking..."
                     : (privilege?.elevationLabel ?? "Indisponível")}
                 </span>
               </Badge>
               <Badge variant="neutral" className="nb-mono">
-                Sessões gravadas: {sessions.length}
+                {locale === "pt" ? "Sessões gravadas" : "Saved sessions"}:{" "}
+                {sessions.length}
               </Badge>
             </div>
 
@@ -145,7 +155,9 @@ export const BackupsView = memo(function BackupsView({
                 className="bg-chart-3 text-main-foreground"
                 onClick={onRequestElevation}
               >
-                {elevating ? "Aguardando UAC..." : "Reiniciar como Administrador"}
+                {elevating
+                  ? "Aguardando UAC..."
+                  : "Reiniciar como Administrador"}
               </Button>
             )}
           </div>
@@ -217,7 +229,7 @@ export const BackupsView = memo(function BackupsView({
           <div className="flex items-center gap-2 border-b-2 border-border bg-main/15 px-4 py-3">
             <History className="size-4" aria-hidden="true" />
             <span className="font-heading text-sm font-bold">
-              Histórico de sessões
+              {locale === "pt" ? "Histórico de sessões" : "Session History"}
             </span>
           </div>
 
@@ -275,7 +287,9 @@ export const BackupsView = memo(function BackupsView({
 
         <Card className="lg:col-span-7">
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-            <CardTitle className="text-base">Inspetor de sessão</CardTitle>
+            <CardTitle className="text-base">
+              {locale === "pt" ? "Inspetor de sessão" : "Session Inspector"}
+            </CardTitle>
 
             {selectedSession && selectedSession.restoredAt === null && (
               <div className="flex items-center gap-2">
@@ -357,31 +371,66 @@ export const BackupsView = memo(function BackupsView({
                 </div>
 
                 <div className="space-y-3">
-                  {selectedSession.entries.map((entry) => (
-                    <div
-                      key={entry.tweakId}
-                      className="rounded-base border-2 border-border bg-background p-3"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-heading text-xs font-bold">
-                          {entry.tweakTitle}
-                        </span>
-                        <span className="nb-mono text-[11px] text-foreground/70">
-                          {entry.tweakId}
-                        </span>
+                  {selectedSession.entries.map((entry) => {
+                    const entryRestored =
+                      Boolean(selectedSession.restoredAt) ||
+                      Boolean(entry.restoredAt);
+                    return (
+                      <div
+                        key={entry.tweakId}
+                        className="rounded-base border-2 border-border bg-background p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-heading text-xs font-bold">
+                              {entry.tweakTitle}
+                            </span>
+                            <span className="nb-mono text-[11px] text-foreground/70">
+                              {entry.tweakId}
+                            </span>
+                            {entryRestored && (
+                              <Badge variant="safe">Restaurado</Badge>
+                            )}
+                          </div>
+
+                          {!entryRestored && onRevertSingleTweak && (
+                            <Button
+                              type="button"
+                              variant="neutral"
+                              size="xs"
+                              disabled={!isAdmin || busy}
+                              onClick={() =>
+                                onRevertSingleTweak(
+                                  entry.tweakId,
+                                  selectedSession.sessionId
+                                )
+                              }
+                            >
+                              <RotateCcw
+                                className="size-3"
+                                aria-hidden="true"
+                              />
+                              <span>
+                                {locale === "pt"
+                                  ? "Reverter item"
+                                  : "Revert item"}
+                              </span>
+                            </Button>
+                          )}
+                        </div>
+                        <ul className="mt-2 space-y-1.5">
+                          {entry.targets.map((target, idx) => (
+                            <li
+                              key={idx}
+                              className="nb-mono break-all rounded-base border-2 border-border bg-secondary-background px-2.5 py-1.5 text-[11px]"
+                            >
+                              {describeTarget(target)}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                      <ul className="mt-2 space-y-1.5">
-                        {entry.targets.map((target, idx) => (
-                          <li
-                            key={idx}
-                            className="nb-mono break-all rounded-base border-2 border-border bg-secondary-background px-2.5 py-1.5 text-[11px]"
-                          >
-                            {describeTarget(target)}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -437,6 +486,8 @@ export function describeTarget(target: BackupTarget): string {
       return `netsh int tcp supplemental (${target.template}) -> original=${target.originalProvider}`;
     case "netAdapterDns":
       return `DNS ${target.interfaceAlias} -> dhcp=${target.wasDhcp}, servidores=[${target.originalServers.join(", ")}]`;
+    case "scheduledTaskState":
+      return `Tarefa Agendada ${target.taskPath} -> original=${target.wasEnabled ? "ativada" : "desativada"}`;
     case "snapshotNote":
       return `${target.description}: ${target.originalValue}`;
   }

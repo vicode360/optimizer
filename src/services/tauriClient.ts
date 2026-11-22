@@ -5,8 +5,11 @@ import type {
   ApplyTweaksResult,
   BackupSession,
   BackupSessionSummary,
+  BenchmarkSnapshot,
   PrivilegeStatus,
   RevertSessionResult,
+  StartupItem,
+  StartupToggleResult,
   SystemScanReport,
   TelemetryTick,
   TweakItem,
@@ -83,6 +86,10 @@ export const tauriClient = {
     return invokeTyped<SystemScanReport>("run_system_scan");
   },
 
+  runSystemBenchmark(): Promise<BenchmarkSnapshot> {
+    return invokeTyped<BenchmarkSnapshot>("run_system_benchmark");
+  },
+
   listBackups(): Promise<BackupSessionSummary[]> {
     return invokeTyped<BackupSessionSummary[]>("list_backups");
   },
@@ -101,17 +108,43 @@ export const tauriClient = {
 
   applyTweaks(
     tweakIds: string[],
-    sessionLabel?: string
+    sessionLabel?: string,
+    createRestorePoint?: boolean
   ): Promise<ApplyTweaksResult> {
     return invokeTyped<ApplyTweaksResult>("apply_tweaks", {
       tweakIds,
       sessionLabel: sessionLabel ?? null,
+      createRestorePoint: createRestorePoint ?? false,
     });
   },
 
   revertBackupSession(sessionId: string): Promise<RevertSessionResult> {
     return invokeTyped<RevertSessionResult>("revert_backup_session", {
       sessionId,
+    });
+  },
+
+  revertSingleTweak(
+    tweakId: string,
+    sessionId?: string
+  ): Promise<RevertSessionResult> {
+    return invokeTyped<RevertSessionResult>("revert_single_tweak", {
+      tweakId,
+      sessionId: sessionId ?? null,
+    });
+  },
+
+  listStartupItems(): Promise<StartupItem[]> {
+    return invokeTyped<StartupItem[]>("list_startup_items");
+  },
+
+  setStartupItemEnabled(
+    itemId: string,
+    enabled: boolean
+  ): Promise<StartupToggleResult> {
+    return invokeTyped<StartupToggleResult>("set_startup_item_enabled", {
+      itemId,
+      enabled,
     });
   },
 

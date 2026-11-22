@@ -81,6 +81,10 @@ pub enum BackupTarget {
         was_dhcp: bool,
         original_servers: Vec<String>,
     },
+    ScheduledTaskState {
+        task_path: String,
+        was_enabled: bool,
+    },
     SnapshotNote {
         description: String,
         original_value: String,
@@ -93,6 +97,8 @@ pub struct BackupEntry {
     pub tweak_id: String,
     pub tweak_title: String,
     pub targets: Vec<BackupTarget>,
+    #[serde(default)]
+    pub restored_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -249,9 +255,65 @@ pub fn load_session_from(dir: &Path, session_id: &str) -> AppResult<BackupSessio
 
 pub fn mark_session_restored_in(dir: &Path, session_id: &str) -> AppResult<BackupSession> {
     let mut session = load_session_from(dir, session_id)?;
-    session.restored_at = Some(Utc::now());
+    let now = Utc::now();
+    session.restored_at = Some(now);
+    for entry in &mut session.entries {
+        if entry.restored_at.is_none() {
+            entry.restored_at = Some(now);
+        }
+    }
     write_session_atomic(dir, &session)?;
     Ok(session)
+}
+
+pub fn mark_entry_restored_in(
+    dir: &Path,
+    session_id: &str,
+    tweak_id: &str,
+) -> AppResult<(BackupSession, bool)> {
+    let mut session = load_session_from(dir, session_id)?;
+    let now = Utc::now();
+    let mut found = false;
+    for entry in &mut session.entries {
+        if entry.tweak_id == tweak_id {
+            entry.restored_at = Some(now);
+            found = true;
+        }
+    }
+    if !found {
+        return Err(AppError::BackupError(format!(
+            "Tweak '{tweak_id}' não encontrado na sessão '{session_id}'."
+        )));
+    }
+    let all_restored = session.entries.iter().all(|e| e.restored_at.is_some());
+    if all_restored {
+        session.restored_at = Some(now);
+    }
+    write_session_atomic(dir, &session)?;
+    Ok((session, all_restored))
+}
+
+pub fn find_latest_active_session_for_tweak_in(
+    dir: &Path,
+    tweak_id: &str,
+) -> AppResult<Option<String>> {
+    let summaries = list_sessions_in(dir)?;
+    for summary in summaries {
+        if summary.restored_at.is_some() {
+            continue;
+        }
+        let Ok(session) = load_session_from(dir, &summary.session_id) else {
+            continue;
+        };
+        if session
+            .entries
+            .iter()
+            .any(|e| e.tweak_id == tweak_id && e.restored_at.is_none())
+        {
+            return Ok(Some(session.session_id));
+        }
+    }
+    Ok(None)
 }
 
 pub fn list_sessions_in(dir: &Path) -> AppResult<Vec<BackupSessionSummary>> {
@@ -357,16 +419,38 @@ mod tests {
                     setting: "loopbacklargemtu".into(),
                     original_value: "enabled".into(),
                 },
+                BackupTarget::ScheduledTaskState {
+                    task_path: r"\Microsoft\Windows\Customer Experience Improvement Program\Consolidator".into(),
+                    was_enabled: true,
+                },
             ],
+            restored_at: None,
         };
 
-        let created = create_session_in(&dir, "Lote Gaming", vec![entry]).unwrap();
+        let second_entry = BackupEntry {
+            tweak_id: "registry_mmcss_gaming".into(),
+            tweak_title: "MMCSS".into(),
+            targets: vec![],
+            restored_at: None,
+        };
+
+        let created = create_session_in(&dir, "Lote Gaming", vec![entry, second_entry]).unwrap();
         assert!(created.restored_at.is_none());
         assert!(!dir.join(format!("{}.json.tmp", created.session_id)).exists());
         assert!(!dir.join(format!("{}.json.bak", created.session_id)).exists());
 
+        let found_id =
+            find_latest_active_session_for_tweak_in(&dir, "registry_disable_gamedvr").unwrap();
+        assert_eq!(found_id.as_deref(), Some(created.session_id.as_str()));
+
+        let (partial_sess, all_done) =
+            mark_entry_restored_in(&dir, &created.session_id, "registry_disable_gamedvr").unwrap();
+        assert!(!all_done);
+        assert!(partial_sess.restored_at.is_none());
+        assert!(partial_sess.entries[0].restored_at.is_some());
+
         let loaded = load_session_from(&dir, &created.session_id).unwrap();
-        assert_eq!(loaded, created);
+        assert_eq!(loaded, partial_sess);
 
         let serialized = serde_json::to_string(&loaded).unwrap();
         assert!(serialized.contains("\"targetType\":\"netshIpGlobal\""));

@@ -383,27 +383,27 @@ pub fn set_hibernation(enabled: bool) -> AppResult<()> {
 }
 
 pub fn read_fsutil_registry_value(fsutil_key: &str) -> Option<u32> {
-    let value_name = match fsutil_key {
-        "disablelastaccess" => "NtfsDisableLastAccessUpdate",
-        "disable8dot3" => "NtfsDisable8dot3NameCreation",
-        "disabledeletenotify" => "DisableDeleteNotify",
+    let candidates: &[&str] = match fsutil_key {
+        "disablelastaccess" => &["NtfsDisableLastAccessUpdate"],
+        "disable8dot3" => &["NtfsDisable8dot3NameCreation"],
+        "disabledeletenotify" => &["NtfsDisableDeleteNotify", "DisableDeleteNotify"],
         _ => return None,
     };
 
-    match read_original_value(
-        &RegistryHive::Hklm,
-        r"SYSTEM\CurrentControlSet\Control\FileSystem",
-        value_name,
-    ) {
-        RegistryOriginalValue::Dword(v) => {
-            if fsutil_key == "disablelastaccess" {
-                Some(v & 0x3)
+    for value_name in candidates {
+        if let RegistryOriginalValue::Dword(v) = read_original_value(
+            &RegistryHive::Hklm,
+            r"SYSTEM\CurrentControlSet\Control\FileSystem",
+            value_name,
+        ) {
+            return Some(if fsutil_key == "disablelastaccess" {
+                v & 0x3
             } else {
-                Some(v)
-            }
+                v
+            });
         }
-        _ => None,
     }
+    None
 }
 
 pub fn parse_fsutil_query_value(output: &str) -> Option<u32> {
@@ -648,6 +648,73 @@ if ($result.Count -eq 0) {{ '[]' }} else {{ ConvertTo-Json -InputObject @($resul
     Ok(parsed)
 }
 
+pub fn query_active_dns_adapters_fast() -> Vec<ActiveDnsAdapter> {
+    use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_READ};
+    use winreg::RegKey;
+
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let base = r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces";
+    let Ok(if_root) = hklm.open_subkey_with_flags(base, KEY_READ) else {
+        return query_active_dns_adapters().unwrap_or_default();
+    };
+
+    let mut adapters = Vec::new();
+    for guid in if_root.enum_keys().flatten() {
+        let subkey_path = format!(r"{base}\{guid}");
+        let Ok(if_key) = hklm.open_subkey_with_flags(&subkey_path, KEY_READ) else {
+            continue;
+        };
+
+        let dhcp_ip: String = if_key.get_value("DhcpIPAddress").unwrap_or_default();
+        let static_ip: Vec<String> = if_key.get_value("IPAddress").unwrap_or_default();
+        let has_valid_ip = (!dhcp_ip.trim().is_empty() && dhcp_ip.trim() != "0.0.0.0")
+            || static_ip
+                .iter()
+                .any(|ip| !ip.trim().is_empty() && ip.trim() != "0.0.0.0");
+
+        if !has_valid_ip {
+            continue;
+        }
+
+        let media_sense: u32 = if_key.get_value("MediaSenseState").unwrap_or(0);
+        if media_sense == 1 {
+            continue;
+        }
+
+        let static_ns: String = if_key.get_value("NameServer").unwrap_or_default();
+        let dhcp_ns: String = if_key.get_value("DhcpNameServer").unwrap_or_default();
+        let is_dhcp = static_ns.trim().is_empty();
+        let raw_ns = if is_dhcp { &dhcp_ns } else { &static_ns };
+        let server_addresses: Vec<String> = raw_ns
+            .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect();
+
+        let conn_path = format!(
+            r"SYSTEM\CurrentControlSet\Control\Network\{{4D36E972-E325-11CE-BFC1-08002BE10318}}\{}\Connection",
+            guid
+        );
+        let alias = hklm
+            .open_subkey_with_flags(&conn_path, KEY_READ)
+            .and_then(|k| k.get_value::<String, _>("Name"))
+            .unwrap_or_else(|_| guid.clone());
+
+        adapters.push(ActiveDnsAdapter {
+            interface_alias: alias,
+            server_addresses,
+            is_dhcp,
+        });
+    }
+
+    if adapters.is_empty() {
+        query_active_dns_adapters().unwrap_or_default()
+    } else {
+        adapters
+    }
+}
+
 pub fn adapters_match_primary_dns(adapters: &[ActiveDnsAdapter], primary_ip: &str) -> bool {
     !adapters.is_empty()
         && adapters.iter().all(|a| {
@@ -744,6 +811,24 @@ pub fn revert_all_active_dns_to_dhcp() -> AppResult<()> {
     for adapter in adapters {
         revert_dns_target(&adapter.interface_alias, true, &[])?;
     }
+    Ok(())
+}
+
+pub fn create_system_restore_point(description: &str) -> AppResult<()> {
+    let escaped = sanitize_ps_single_quoted(description);
+    let cmd = format!(
+        "{PS_UTF8_PREAMBLE} Checkpoint-Computer -Description '{escaped}' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop"
+    );
+    run_hidden(
+        "powershell.exe",
+        &["-NoProfile", "-NonInteractive", "-Command", &cmd],
+    )?;
+    Ok(())
+}
+
+pub fn set_scheduled_task_enabled(task_path: &str, enabled: bool) -> AppResult<()> {
+    let flag = if enabled { "/ENABLE" } else { "/DISABLE" };
+    run_hidden("schtasks", &["/Change", "/TN", task_path, flag])?;
     Ok(())
 }
 

@@ -1,3 +1,5 @@
+export type AppLocale = "pt" | "en";
+
 export type AppErrorCode =
   | "ADMIN_REQUIRED"
   | "IO_ERROR"
@@ -88,6 +90,11 @@ export type BackupTarget =
       originalServers: string[];
     }
   | {
+      targetType: "scheduledTaskState";
+      taskPath: string;
+      wasEnabled: boolean;
+    }
+  | {
       targetType: "snapshotNote";
       description: string;
       originalValue: string;
@@ -97,6 +104,7 @@ export interface BackupEntry {
   tweakId: string;
   tweakTitle: string;
   targets: BackupTarget[];
+  restoredAt?: string | null;
 }
 
 export interface BackupSession {
@@ -218,6 +226,46 @@ export interface SystemScanReport {
   diagnostics: DiagnosticFinding[];
 }
 
+export interface BenchmarkSnapshot {
+  capturedAt: string;
+  timerAvgMs: number;
+  timerP95Ms: number;
+  timerJitterMs: number;
+  dnsLatencyMs: number | null;
+  primaryDnsServer: string;
+  memoryAvailableBytes: number;
+  memoryUsedBytes: number;
+  memoryTotalBytes: number;
+  memoryPercent: number;
+  powerPlanName: string;
+  tcpAutotuning: string;
+  tcpRss: string;
+  tcpRsc: string;
+  tcpCongestionProvider: string;
+}
+
+export type StartupSource =
+  | "hkcuRun"
+  | "hklmRun"
+  | "hklmRun32"
+  | "scheduledTask";
+
+export interface StartupItem {
+  id: string;
+  name: string;
+  commandOrPath: string;
+  locationLabel: string;
+  source: StartupSource;
+  enabled: boolean;
+  requiresAdmin: boolean;
+}
+
+export interface StartupToggleResult {
+  id: string;
+  enabled: boolean;
+  backupSessionId: string | null;
+}
+
 export interface TelemetryTick {
   timestamp: string;
   cpuUsagePercent: number;
@@ -280,6 +328,8 @@ export interface ApplyTweaksResult {
   backupPath: string;
   appliedIds: string[];
   failures: TweakOperationFailure[];
+  restorePointCreated?: boolean;
+  restorePointWarning?: string | null;
 }
 
 export interface RevertSessionResult {
@@ -293,5 +343,6 @@ export type ActiveSection =
   | "diagnostics"
   | "hardware"
   | "telemetry"
+  | "startup"
   | "backups"
   | "tweaks";

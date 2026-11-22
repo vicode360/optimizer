@@ -4,6 +4,7 @@ import { BackupsView } from "./components/BackupsView";
 import { DiagnosticsView } from "./components/DiagnosticsView";
 import { HardwareView } from "./components/HardwareView";
 import { Sidebar } from "./components/Sidebar";
+import { StartupView } from "./components/StartupView";
 import { TelemetryView } from "./components/TelemetryView";
 import { TopBar } from "./components/TopBar";
 import { TweaksView } from "./components/TweaksView";
@@ -16,9 +17,15 @@ import { useSystemScan } from "./hooks/useSystemScan";
 import { useTelemetry } from "./hooks/useTelemetry";
 import { useTweaks } from "./hooks/useTweaks";
 import { normalizeAppError, tauriClient } from "./services/tauriClient";
-import type { ActiveSection, AppError, DiagnosticFinding } from "./types/system";
+import type {
+  ActiveSection,
+  AppError,
+  AppLocale,
+  DiagnosticFinding,
+} from "./types/system";
 
 const THEME_STORAGE_KEY = "optimizer-theme";
+const LOCALE_STORAGE_KEY = "optimizer-locale";
 const EMPTY_DIAGNOSTICS: DiagnosticFinding[] = [];
 
 function readInitialTheme(): "light" | "dark" {
@@ -31,10 +38,21 @@ function readInitialTheme(): "light" | "dark" {
   }
 }
 
+function readInitialLocale(): AppLocale {
+  try {
+    return window.localStorage.getItem(LOCALE_STORAGE_KEY) === "en"
+      ? "en"
+      : "pt";
+  } catch {
+    return "pt";
+  }
+}
+
 export function App() {
   const [activeSection, setActiveSection] =
     useState<ActiveSection>("diagnostics");
   const [theme, setTheme] = useState<"light" | "dark">(readInitialTheme);
+  const [locale, setLocale] = useState<AppLocale>(readInitialLocale);
   const [elevationError, setElevationError] = useState<AppError | null>(null);
   const [elevating, setElevating] = useState(false);
   const elevatingRef = useRef(false);
@@ -57,8 +75,21 @@ export function App() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    document.documentElement.lang = locale === "en" ? "en-US" : "pt-BR";
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      // Ignore storage persistence errors.
+    }
+  }, [locale]);
+
   const handleToggleTheme = useCallback(() => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  }, []);
+
+  const handleToggleLocale = useCallback(() => {
+    setLocale((prev) => (prev === "pt" ? "en" : "pt"));
   }, []);
 
   const handleMutationComplete = useCallback(async () => {
@@ -111,6 +142,13 @@ export function App() {
   const handleRevertSession = useCallback(
     (sessionId: string) => {
       void tweaks.revertSession(sessionId);
+    },
+    [tweaks]
+  );
+
+  const handleRevertSingleTweak = useCallback(
+    (tweakId: string, sessionId?: string) => {
+      void tweaks.revertSingleTweak(tweakId, sessionId);
     },
     [tweaks]
   );
@@ -180,6 +218,7 @@ export function App() {
       <Sidebar
         activeSection={activeSection}
         onSelectSection={setActiveSection}
+        locale={locale}
         privilege={privilege}
         privilegeLoading={privilegeLoading}
         elevating={elevating}
@@ -200,6 +239,8 @@ export function App() {
           telemetryConnected={telemetry.connected}
           theme={theme}
           onToggleTheme={handleToggleTheme}
+          locale={locale}
+          onToggleLocale={handleToggleLocale}
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto bg-background px-6 py-6">
@@ -245,6 +286,7 @@ export function App() {
                     report={report}
                     telemetry={telemetry.latest}
                     scanning={scanning}
+                    locale={locale}
                     pendingRecommendedCount={pendingRecommendedIds.length}
                     onOpenTweaks={handleOpenTweaks}
                     onQuickOptimize={handleQuickOptimize}
@@ -274,6 +316,16 @@ export function App() {
               />
             )}
 
+            {activeSection === "startup" && (
+              <StartupView
+                locale={locale}
+                privilege={privilege}
+                elevating={elevating}
+                onRequestElevation={handleRequestElevation}
+                onMutationComplete={handleMutationComplete}
+              />
+            )}
+
             {activeSection === "backups" && (
               <BackupsView
                 directory={backups.directory}
@@ -283,6 +335,7 @@ export function App() {
                 loadingSession={backups.loadingSession}
                 busy={tweaks.busy}
                 elevating={elevating}
+                locale={locale}
                 progress={tweaks.progress}
                 lastRevertResult={tweaks.lastRevertResult}
                 error={backups.error ?? tweaks.error}
@@ -291,6 +344,7 @@ export function App() {
                 onRefresh={handleRefreshBackups}
                 onInspectSession={handleInspectSession}
                 onRevertSession={handleRevertSession}
+                onRevertSingleTweak={handleRevertSingleTweak}
                 onRequestElevation={handleRequestElevation}
               />
             )}
@@ -300,6 +354,8 @@ export function App() {
                 items={tweaks.items}
                 selectedIds={tweaks.selectedIds}
                 sessionLabel={tweaks.sessionLabel}
+                createRestorePoint={tweaks.createRestorePoint}
+                locale={locale}
                 activeBackupSessions={activeBackupSessions}
                 loading={tweaks.loading}
                 busy={tweaks.busy}
@@ -314,8 +370,10 @@ export function App() {
                 onToggleSelect={tweaks.toggleSelect}
                 onSetSelected={tweaks.setSelected}
                 onSessionLabelChange={tweaks.setSessionLabel}
+                onCreateRestorePointChange={tweaks.setCreateRestorePoint}
                 onClearSelection={tweaks.clearSelection}
                 onApplySelected={handleApplySelected}
+                onRevertSingleTweak={handleRevertSingleTweak}
                 onRevertAllActive={handleRevertAllActive}
                 onRequestElevation={handleRequestElevation}
                 onInspectBackupSession={handleInspectBackupFromTweaks}

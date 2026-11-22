@@ -20,15 +20,19 @@
 
 ## Features
 
-### 1. System Diagnostics & Native Hardware Inventory
-- Reads CPU, RAM, swap, GPUs, disks, network adapters, active power plan, monitors (`EnumDisplaySettingsW`), and input devices via `sysinfo`, WMI, and Win32 GDI.
-- Evaluates real Windows state before surfacing actionable recommendations.
+### 1. System Diagnostics, Native Hardware Inventory & Before/After Benchmark
+- Reads CPU, RAM, swap, GPUs (including 64-bit `HardwareInformation.qwMemorySize` VRAM > 4 GiB), disks, network adapters, active power plan, monitors (`EnumDisplaySettingsW`), and input devices (`Win32_PnPEntity`) via `sysinfo`, WMI, and Win32 GDI.
+- **Integrated Before & After Benchmark:** Measures real 1ms kernel timer sleep average/P95/jitter, live DNS resolution latency, available RAM, active power scheme, and TCP stack state before and after applying optimizations.
+- **Bilingual Interface (`PT-BR` / `EN-US`) & Light/Dark Neobrutalism Themes:** Instant zero-latency language and theme switching in the top bar.
 
 ### 2. Real-Time Telemetry (1 Hz)
 - Streams global CPU load, per-logical-core usage, memory utilization, active network RX/TX throughput, and system uptime over Tauri IPC (`telemetry://tick`).
 
-### 3. 58 Audited, Reversible System Tweaks
-Organized across 7 modular Rust backend engines (`src-tauri/src/tweaks/`) with instant search, category filters, risk levels (`SAFE`, `MODERATE`, `ADVANCED`), and curated presets:
+### 3. Startup Programs & Scheduled Tasks Manager
+- Inspects `HKCU Run`, `HKLM Run`, `HKLM Run32` (toggled non-destructively via Windows `StartupApproved\Run` binary flags without deleting Registry entries), and Windows telemetry/updater Scheduled Tasks (`schtasks`), with automatic atomic backup in `%AppData%\optimizer\backups\`.
+
+### 4. 58 Audited, Reversible System Tweaks
+Organized across 7 modular Rust backend engines (`src-tauri/src/tweaks/`) with instant search, category filters, risk levels (`SAFE`, `MODERATE`, `ADVANCED`), optional **Windows System Restore Point (VSS)** creation, **single-tweak rollback**, and curated presets:
 
 | Module | Count | Examples |
 | --- | :---: | --- |

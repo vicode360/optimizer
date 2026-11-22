@@ -3,18 +3,21 @@ import {
   Activity,
   Cpu,
   History,
+  Power,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
   Stethoscope,
 } from "lucide-react";
-import type { ActiveSection, PrivilegeStatus } from "../types/system";
+import { UI_COPY } from "../i18n";
+import type { ActiveSection, AppLocale, PrivilegeStatus } from "../types/system";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 
 interface SidebarProps {
   activeSection: ActiveSection;
   onSelectSection: (section: ActiveSection) => void;
+  locale: AppLocale;
   privilege: PrivilegeStatus | null;
   privilegeLoading: boolean;
   elevating: boolean;
@@ -37,6 +40,7 @@ interface NavItem {
 export const Sidebar = memo(function Sidebar({
   activeSection,
   onSelectSection,
+  locale,
   privilege,
   privilegeLoading,
   elevating,
@@ -47,29 +51,31 @@ export const Sidebar = memo(function Sidebar({
   telemetryConnected,
   onRequestElevation,
 }: SidebarProps) {
+  const copy = UI_COPY[locale].nav;
+
   const navItems: NavItem[] = [
     {
       id: "diagnostics",
-      label: "Diagnóstico",
+      label: copy.diagnostics,
       icon: Stethoscope,
       badge: alertCount > 0 ? alertCount : undefined,
       badgeVariant: "moderate",
     },
     {
       id: "hardware",
-      label: "Hardware",
+      label: copy.hardware,
       icon: Cpu,
     },
     {
       id: "telemetry",
-      label: "Telemetria",
+      label: copy.telemetry,
       icon: Activity,
       badge: telemetryConnected ? "LIVE" : undefined,
       badgeVariant: "safe",
     },
     {
       id: "tweaks",
-      label: "Tweaks",
+      label: copy.tweaks,
       icon: SlidersHorizontal,
       badge:
         totalTweaksCount > 0
@@ -78,8 +84,13 @@ export const Sidebar = memo(function Sidebar({
       badgeVariant: "neutral",
     },
     {
+      id: "startup",
+      label: copy.startup,
+      icon: Power,
+    },
+    {
       id: "backups",
-      label: "Backups",
+      label: copy.backups,
       icon: History,
       badge: backupCount > 0 ? backupCount : undefined,
       badgeVariant: "neutral",
@@ -164,13 +175,13 @@ export const Sidebar = memo(function Sidebar({
             <div className="min-w-0 flex-1">
               <div className="font-heading text-xs font-bold">
                 {privilegeLoading
-                  ? "Verificando token..."
+                  ? copy.verifyingToken
                   : privilege?.isAdmin
-                    ? "Administrador"
-                    : "Usuário padrão"}
+                    ? copy.admin
+                    : copy.standardUser}
               </div>
               <div className="nb-mono mt-0.5 truncate text-[11px] text-foreground/75">
-                {privilege ? privilege.username : "Sem leitura"}
+                {privilege ? privilege.username : "—"}
               </div>
             </div>
           </div>
@@ -183,7 +194,7 @@ export const Sidebar = memo(function Sidebar({
               className="mt-3 w-full bg-chart-3 text-main-foreground"
               onClick={onRequestElevation}
             >
-              {elevating ? "Aguardando UAC..." : "Elevar como Admin"}
+              {elevating ? copy.waitingUac : copy.elevateBtn}
             </Button>
           )}
         </div>

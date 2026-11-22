@@ -126,6 +126,14 @@ struct WmiKeyboard {
     status: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct WmiPnpKeyboardEntity {
+    #[serde(rename = "DeviceID")]
+    device_id: Option<String>,
+    manufacturer: Option<String>,
+}
+
 fn query_input_devices_wmi() -> (Vec<InputDeviceInfo>, Vec<InputDeviceInfo>) {
     std::thread::spawn(|| {
         let Ok(com) = wmi::COMLibrary::new() else {
@@ -143,6 +151,23 @@ fn query_input_devices_wmi() -> (Vec<InputDeviceInfo>, Vec<InputDeviceInfo>) {
             .raw_query("SELECT Name, Description, DeviceID, Status FROM Win32_Keyboard")
             .unwrap_or_default();
 
+        let pnp_kb_rows: Vec<WmiPnpKeyboardEntity> = wmi_con
+            .raw_query("SELECT DeviceID, Manufacturer FROM Win32_PnPEntity WHERE PNPClass = 'Keyboard'")
+            .unwrap_or_default();
+
+        let pnp_manufacturers: std::collections::HashMap<String, String> = pnp_kb_rows
+            .into_iter()
+            .filter_map(|row| {
+                let id = row.device_id?.trim().to_ascii_lowercase();
+                let mfg = row.manufacturer?.trim().to_string();
+                if id.is_empty() || mfg.is_empty() {
+                    None
+                } else {
+                    Some((id, mfg))
+                }
+            })
+            .collect();
+
         let mice = mice_rows
             .into_iter()
             .map(|m| InputDeviceInfo {
@@ -155,14 +180,22 @@ fn query_input_devices_wmi() -> (Vec<InputDeviceInfo>, Vec<InputDeviceInfo>) {
 
         let keyboards = kb_rows
             .into_iter()
-            .map(|k| InputDeviceInfo {
-                name: k
-                    .description
-                    .or(k.name)
-                    .unwrap_or_else(|| "Teclado HID".into()),
-                manufacturer: "Microsoft / HID".into(),
-                device_id: k.device_id.unwrap_or_default(),
-                status: k.status.unwrap_or_else(|| "OK".into()),
+            .map(|k| {
+                let dev_id = k.device_id.unwrap_or_default();
+                let manufacturer = pnp_manufacturers
+                    .get(&dev_id.trim().to_ascii_lowercase())
+                    .cloned()
+                    .unwrap_or_else(|| "HID / Padrão".into());
+
+                InputDeviceInfo {
+                    name: k
+                        .description
+                        .or(k.name)
+                        .unwrap_or_else(|| "Teclado HID".into()),
+                    manufacturer,
+                    device_id: dev_id,
+                    status: k.status.unwrap_or_else(|| "OK".into()),
+                }
             })
             .collect();
 
