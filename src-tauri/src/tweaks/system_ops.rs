@@ -832,6 +832,43 @@ pub fn set_scheduled_task_enabled(task_path: &str, enabled: bool) -> AppResult<(
     Ok(())
 }
 
+pub fn set_interface_mtu(interface_alias: &str, mtu: u32) -> AppResult<()> {
+    let mtu_arg = format!("mtu={mtu}");
+    run_hidden(
+        "netsh",
+        &[
+            "interface",
+            "ipv4",
+            "set",
+            "subinterface",
+            interface_alias,
+            &mtu_arg,
+            "store=persistent",
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn delete_qos_policy_subkey(policy_name: &str) -> AppResult<()> {
+    use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_WRITE};
+    use winreg::RegKey;
+
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let base = r"SOFTWARE\Policies\Microsoft\Windows\QoS";
+    if let Ok(qos_root) = hklm.open_subkey_with_flags(base, KEY_WRITE) {
+        match qos_root.delete_subkey_all(policy_name) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(AppError::WindowsApi(format!(
+                    "Falha ao remover política QoS '{policy_name}': {e}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(windows)]
 pub fn purge_standby_list() -> AppResult<u64> {
     use std::ffi::c_void;

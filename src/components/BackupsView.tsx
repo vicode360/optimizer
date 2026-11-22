@@ -488,6 +488,10 @@ export function describeTarget(target: BackupTarget): string {
       return `DNS ${target.interfaceAlias} -> dhcp=${target.wasDhcp}, servidores=[${target.originalServers.join(", ")}]`;
     case "scheduledTaskState":
       return `Tarefa Agendada ${target.taskPath} -> original=${target.wasEnabled ? "ativada" : "desativada"}`;
+    case "netInterfaceMtu":
+      return `MTU ${target.interfaceAlias} -> original=${target.originalMtu} bytes`;
+    case "qosPolicy":
+      return `Política QoS DSCP 46 -> HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\QoS\\${target.policyName}`;
     case "snapshotNote":
       return `${target.description}: ${target.originalValue}`;
   }

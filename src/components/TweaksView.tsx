@@ -22,7 +22,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { localizeTweak } from "../i18n";
+import { localizeTweak, REBOOT_REQUIRED_TWEAK_IDS } from "../i18n";
 import type {
   AppError,
   AppLocale,
@@ -818,6 +818,12 @@ export const TweaksView = memo(function TweaksView({
                           <Badge variant={risk.variant} className="nb-mono">
                             {risk.label}
                           </Badge>
+
+                          {REBOOT_REQUIRED_TWEAK_IDS.has(item.id) && (
+                            <Badge variant="moderate" className="nb-mono">
+                              REBOOT
+                            </Badge>
+                          )}
                         </div>
 
                         <div className="flex shrink-0 items-center gap-1.5">

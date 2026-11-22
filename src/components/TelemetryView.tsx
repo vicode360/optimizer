@@ -94,13 +94,21 @@ export function TelemetryView({ latest, history }: TelemetryViewProps) {
           <div className="p-4">
             <div className="flex items-center gap-1.5 font-heading text-xs font-bold uppercase text-foreground/70">
               <ArrowUpFromLine className="size-4" aria-hidden="true" />
-              <span>Upload (TX)</span>
+              <span>Upload (TX) & Kernel Timer</span>
             </div>
             <div className="nb-mono mt-2 text-2xl font-bold">
               {formatBytesPerSec(latest.networkTxBytesPerSec)}
             </div>
-            <div className="nb-mono mt-1 text-[11px] text-foreground/70">
-              Uptime: {formatUptime(latest.uptimeSeconds)}
+            <div className="nb-mono mt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-foreground/70">
+              <span>Uptime: {formatUptime(latest.uptimeSeconds)}</span>
+              {latest.timerResolutionMs !== undefined && (
+                <Badge
+                  variant={latest.timerResolutionMs <= 1.05 ? "safe" : "neutral"}
+                  className="nb-mono px-1.5 py-0 text-[10px]"
+                >
+                  Timer: {latest.timerResolutionMs.toFixed(2)} ms
+                </Badge>
+              )}
             </div>
           </div>
         </div>

@@ -454,6 +454,15 @@ const DIAGNOSTIC_EN: Record<string, { title: string; detail: string }> = {
   },
 };
 
+export const REBOOT_REQUIRED_TWEAK_IDS = new Set([
+  "gpu_enable_hags",
+  "gpu_disable_mpo",
+  "gpu_msi_mode_display",
+  "gaming_split_svchost_threshold",
+  "security_disable_vbs_hvci_gaming",
+  "security_disable_smbv1",
+]);
+
 export function localizeTweak(item: TweakItem, locale: AppLocale): TweakItem {
   if (locale === "pt") return item;
   const en = TWEAK_EN[item.id];
@@ -484,6 +493,7 @@ export const UI_COPY = {
   pt: {
     nav: {
       diagnostics: "Diagnóstico",
+      netlab: "NetLab (Ping & QoS)",
       hardware: "Hardware",
       telemetry: "Telemetria",
       startup: "Inicialização",
@@ -494,16 +504,20 @@ export const UI_COPY = {
       standardUser: "Usuário padrão",
       elevateBtn: "Elevar como Admin",
       waitingUac: "Aguardando UAC...",
+      checkUpdates: "Verificar Atualizações",
     },
     topBar: {
       diagnosticsTitle: "Diagnóstico",
       diagnosticsSub:
         "Saúde do sistema, benchmark antes/depois e recomendações reais",
+      netlabTitle: "NetLab — Rotas, Ping, QoS DSCP 46 & Auto-MTU",
+      netlabSub:
+        "Priorização de pacotes de jogos (Pacer.sys EF), análise de rota Hop-by-Hop, benchmark DNS UDP e eliminação de fragmentação",
       hardwareTitle: "Hardware e periféricos",
       hardwareSub: "Inventário nativo via sysinfo, WMI e Win32 GDI (VRAM 64-bit)",
       telemetryTitle: "Telemetria ao vivo",
       telemetrySub:
-        "Monitoramento contínuo de CPU, memória e tráfego de rede (1 Hz)",
+        "Monitoramento contínuo de CPU, memória, Kernel Timer e tráfego de rede (1 Hz)",
       startupTitle: "Inicialização e tarefas agendadas",
       startupSub:
         "Controle reversível de StartupApproved (Run) e tarefas do Windows com backup atômico",
@@ -560,6 +574,7 @@ export const UI_COPY = {
   en: {
     nav: {
       diagnostics: "Diagnostics",
+      netlab: "NetLab (Ping & QoS)",
       hardware: "Hardware",
       telemetry: "Telemetry",
       startup: "Startup",
@@ -570,16 +585,20 @@ export const UI_COPY = {
       standardUser: "Standard User",
       elevateBtn: "Elevate as Admin",
       waitingUac: "Waiting for UAC...",
+      checkUpdates: "Check for Updates",
     },
     topBar: {
       diagnosticsTitle: "Diagnostics",
       diagnosticsSub:
         "System health, before/after benchmark, and real state recommendations",
+      netlabTitle: "NetLab — Routes, Ping, QoS DSCP 46 & Auto-MTU",
+      netlabSub:
+        "Game packet prioritization (Pacer.sys EF), Hop-by-Hop route inspector, UDP DNS benchmark, and fragmentation removal",
       hardwareTitle: "Hardware & Peripherals",
       hardwareSub: "Native inventory via sysinfo, WMI, and Win32 GDI (64-bit VRAM)",
       telemetryTitle: "Live Telemetry",
       telemetrySub:
-        "Continuous 1 Hz CPU, memory, and network throughput monitoring",
+        "Continuous 1 Hz CPU, memory, Kernel Timer, and network throughput monitoring",
       startupTitle: "Startup & Scheduled Tasks",
       startupSub:
         "Reversible StartupApproved (Run) and scheduled task control with atomic backups",

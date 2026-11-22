@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { BackupsView } from "./components/BackupsView";
+import { CommandPalette } from "./components/CommandPalette";
 import { DiagnosticsView } from "./components/DiagnosticsView";
 import { HardwareView } from "./components/HardwareView";
+import { NetLabView } from "./components/NetLabView";
 import { Sidebar } from "./components/Sidebar";
 import { StartupView } from "./components/StartupView";
 import { TelemetryView } from "./components/TelemetryView";
 import { TopBar } from "./components/TopBar";
 import { TweaksView } from "./components/TweaksView";
+import { UpdateModal } from "./components/UpdateModal";
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
@@ -16,16 +19,19 @@ import { usePrivilegeStatus } from "./hooks/usePrivilegeStatus";
 import { useSystemScan } from "./hooks/useSystemScan";
 import { useTelemetry } from "./hooks/useTelemetry";
 import { useTweaks } from "./hooks/useTweaks";
-import { normalizeAppError, tauriClient } from "./services/tauriClient";
+import { isTauriRuntime, normalizeAppError, tauriClient } from "./services/tauriClient";
 import type {
   ActiveSection,
   AppError,
   AppLocale,
   DiagnosticFinding,
+  UpdateCheckResult,
 } from "./types/system";
+import { formatBytes } from "./utils/format";
 
 const THEME_STORAGE_KEY = "optimizer-theme";
 const LOCALE_STORAGE_KEY = "optimizer-locale";
+const IGNORED_RELEASE_KEY = "optimizer-ignored-release";
 const EMPTY_DIAGNOSTICS: DiagnosticFinding[] = [];
 
 function readInitialTheme(): "light" | "dark" {
@@ -57,6 +63,12 @@ export function App() {
   const [elevating, setElevating] = useState(false);
   const elevatingRef = useRef(false);
 
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [updateError, setUpdateError] = useState<AppError | null>(null);
+
   const {
     privilege,
     loading: privilegeLoading,
@@ -84,6 +96,61 @@ export function App() {
     }
   }, [locale]);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      } else if (e.key === "Escape") {
+        setCommandPaletteOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const handleCheckUpdates = useCallback(async (openIfFoundOnly = false) => {
+    if (!isTauriRuntime() && openIfFoundOnly) return;
+    setCheckingUpdates(true);
+    setUpdateError(null);
+    if (!openIfFoundOnly) {
+      setUpdateModalOpen(true);
+    }
+    try {
+      const info = await tauriClient.checkGithubUpdates();
+      setUpdateInfo(info);
+      if (openIfFoundOnly && info.updateAvailable) {
+        let ignoredTag: string | null = null;
+        try {
+          ignoredTag = window.localStorage.getItem(IGNORED_RELEASE_KEY);
+        } catch {
+          // Ignore storage read errors.
+        }
+        if (ignoredTag !== info.releaseTag) {
+          setUpdateModalOpen(true);
+        }
+      }
+    } catch (err) {
+      if (!openIfFoundOnly) {
+        setUpdateError(normalizeAppError(err));
+      }
+    } finally {
+      setCheckingUpdates(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void handleCheckUpdates(true);
+  }, [handleCheckUpdates]);
+
+  const handleIgnoreVersion = useCallback((tag: string) => {
+    try {
+      window.localStorage.setItem(IGNORED_RELEASE_KEY, tag);
+    } catch {
+      // Ignore storage errors.
+    }
+  }, []);
+
   const handleToggleTheme = useCallback(() => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   }, []);
@@ -99,6 +166,36 @@ export function App() {
   const tweaks = useTweaks({
     onMutationComplete: handleMutationComplete,
   });
+
+  const handleExportReport = useCallback(() => {
+    const applied = tweaks.items.filter((t) => t.applied);
+    const lines = [
+      `# Optimizer — Technical System Audit Report`,
+      `Generated at: ${new Date().toISOString()}`,
+      ``,
+      `## Hardware Summary`,
+      `- **Host / OS:** ${report?.hardware.os.hostname ?? "—"} (${report?.hardware.os.name ?? ""} ${report?.hardware.os.version ?? ""})`,
+      `- **CPU:** ${report?.hardware.cpu.brand ?? "—"} (${report?.hardware.cpu.physicalCores ?? 0}C / ${report?.hardware.cpu.logicalCores ?? 0}T)`,
+      `- **Memory:** ${formatBytes(report?.hardware.memory.usedBytes ?? 0)} / ${formatBytes(report?.hardware.memory.totalBytes ?? 0)}`,
+      `- **Active Power Plan:** ${report?.hardware.powerPlan.name ?? "—"}`,
+      `- **GPUs:** ${(report?.hardware.gpus ?? []).map((g) => `${g.name} (${formatBytes(g.vramBytes)})`).join(", ") || "—"}`,
+      ``,
+      `## Applied Optimizations (${applied.length}/${tweaks.items.length})`,
+      ...applied.map((t) => `- \`${t.id}\` — **${t.title}** (${t.risk.toUpperCase()})`),
+      ``,
+    ];
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/markdown;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `optimizer-audit-report.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [report, tweaks.items]);
 
   const handleRequestElevation = useCallback(() => {
     if (elevatingRef.current) return;
@@ -179,6 +276,14 @@ export function App() {
     setActiveSection("tweaks");
   }, []);
 
+  const handleOpenUpdatesManual = useCallback(() => {
+    void handleCheckUpdates(false);
+  }, [handleCheckUpdates]);
+
+  const handleOpenCommandPalette = useCallback(() => {
+    setCommandPaletteOpen(true);
+  }, []);
+
   const pendingRecommendedIds = useMemo(() => {
     const recommendedIds = new Set(
       (report?.diagnostics ?? []).flatMap((d) => d.recommendedTweakIds)
@@ -227,7 +332,9 @@ export function App() {
         appliedTweaksCount={appliedTweaksCount}
         totalTweaksCount={tweaks.items.length}
         telemetryConnected={telemetry.connected}
+        updateAvailable={Boolean(updateInfo?.updateAvailable)}
         onRequestElevation={handleRequestElevation}
+        onOpenUpdates={handleOpenUpdatesManual}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -241,6 +348,10 @@ export function App() {
           onToggleTheme={handleToggleTheme}
           locale={locale}
           onToggleLocale={handleToggleLocale}
+          updateAvailable={Boolean(updateInfo?.updateAvailable)}
+          onOpenUpdates={handleOpenUpdatesManual}
+          onOpenCommandPalette={handleOpenCommandPalette}
+          onExportReport={handleExportReport}
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto bg-background px-6 py-6">
@@ -293,6 +404,16 @@ export function App() {
                   />
                 )}
               </ScanGate>
+            )}
+
+            {activeSection === "netlab" && (
+              <NetLabView
+                locale={locale}
+                privilege={privilege}
+                elevating={elevating}
+                onRequestElevation={handleRequestElevation}
+                onMutationComplete={handleMutationComplete}
+              />
             )}
 
             {activeSection === "hardware" && (
@@ -382,6 +503,32 @@ export function App() {
           </div>
         </main>
       </div>
+
+      <UpdateModal
+        open={updateModalOpen}
+        locale={locale}
+        checking={checkingUpdates}
+        updateInfo={updateInfo}
+        checkError={updateError}
+        onClose={() => setUpdateModalOpen(false)}
+        onRecheck={handleOpenUpdatesManual}
+        onIgnoreVersion={handleIgnoreVersion}
+      />
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        locale={locale}
+        theme={theme}
+        tweaks={tweaks.items}
+        onClose={() => setCommandPaletteOpen(false)}
+        onNavigate={setActiveSection}
+        onSelectTweak={tweaks.toggleSelect}
+        onToggleTheme={handleToggleTheme}
+        onToggleLocale={handleToggleLocale}
+        onOpenUpdates={handleOpenUpdatesManual}
+        onRunScan={handleRunScan}
+        onExportReport={handleExportReport}
+      />
     </div>
   );
 }

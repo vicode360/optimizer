@@ -19,6 +19,37 @@ pub struct TelemetryTick {
     pub network_rx_bytes_per_sec: u64,
     pub network_tx_bytes_per_sec: u64,
     pub uptime_seconds: u64,
+    pub timer_resolution_ms: f64,
+}
+
+#[cfg(windows)]
+pub fn query_kernel_timer_resolution_ms() -> f64 {
+    #[link(name = "ntdll")]
+    extern "system" {
+        fn NtQueryTimerResolution(
+            minimum_resolution: *mut u32,
+            maximum_resolution: *mut u32,
+            current_resolution: *mut u32,
+        ) -> i32;
+    }
+
+    let mut min_100ns = 0u32;
+    let mut max_100ns = 0u32;
+    let mut current_100ns = 0u32;
+    let status = unsafe {
+        NtQueryTimerResolution(&mut min_100ns, &mut max_100ns, &mut current_100ns)
+    };
+    if status == 0 && current_100ns > 0 {
+        let ms = (current_100ns as f64) / 10_000.0;
+        (ms * 100.0).round() / 100.0
+    } else {
+        15.62
+    }
+}
+
+#[cfg(not(windows))]
+pub fn query_kernel_timer_resolution_ms() -> f64 {
+    15.62
 }
 
 pub fn collect_tick(
@@ -62,6 +93,7 @@ pub fn collect_tick(
         network_rx_bytes_per_sec,
         network_tx_bytes_per_sec,
         uptime_seconds: System::uptime(),
+        timer_resolution_ms: query_kernel_timer_resolution_ms(),
     }
 }
 

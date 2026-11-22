@@ -4,9 +4,11 @@ import {
   Cpu,
   History,
   Power,
+  Radar,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Stethoscope,
 } from "lucide-react";
 import { UI_COPY } from "../i18n";
@@ -26,7 +28,9 @@ interface SidebarProps {
   appliedTweaksCount: number;
   totalTweaksCount: number;
   telemetryConnected: boolean;
+  updateAvailable?: boolean;
   onRequestElevation: () => void;
+  onOpenUpdates?: () => void;
 }
 
 interface NavItem {
@@ -49,7 +53,9 @@ export const Sidebar = memo(function Sidebar({
   appliedTweaksCount,
   totalTweaksCount,
   telemetryConnected,
+  updateAvailable = false,
   onRequestElevation,
+  onOpenUpdates,
 }: SidebarProps) {
   const copy = UI_COPY[locale].nav;
 
@@ -62,15 +68,10 @@ export const Sidebar = memo(function Sidebar({
       badgeVariant: "moderate",
     },
     {
-      id: "hardware",
-      label: copy.hardware,
-      icon: Cpu,
-    },
-    {
-      id: "telemetry",
-      label: copy.telemetry,
-      icon: Activity,
-      badge: telemetryConnected ? "LIVE" : undefined,
+      id: "netlab",
+      label: copy.netlab,
+      icon: Radar,
+      badge: "QoS",
       badgeVariant: "safe",
     },
     {
@@ -89,6 +90,18 @@ export const Sidebar = memo(function Sidebar({
       icon: Power,
     },
     {
+      id: "hardware",
+      label: copy.hardware,
+      icon: Cpu,
+    },
+    {
+      id: "telemetry",
+      label: copy.telemetry,
+      icon: Activity,
+      badge: telemetryConnected ? "LIVE" : undefined,
+      badgeVariant: "safe",
+    },
+    {
       id: "backups",
       label: copy.backups,
       icon: History,
@@ -99,23 +112,25 @@ export const Sidebar = memo(function Sidebar({
 
   return (
     <aside className="flex min-h-0 w-60 shrink-0 flex-col border-r-2 border-border bg-secondary-background">
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b-2 border-border px-4">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-base border-2 border-border bg-main text-main-foreground shadow-[2px_2px_0px_0px_var(--border)]">
-          <Activity className="size-4 stroke-[2.5]" aria-hidden="true" />
-        </div>
-        <div className="min-w-0">
-          <div className="truncate font-heading text-base leading-none font-bold tracking-tight uppercase">
-            Optimizer
+      <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b-2 border-border px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-base border-2 border-border bg-main text-main-foreground shadow-[2px_2px_0px_0px_var(--border)]">
+            <Activity className="size-4 stroke-[2.5]" aria-hidden="true" />
           </div>
-          <div className="nb-mono mt-1 truncate text-[11px] text-foreground/65">
-            Windows Console
+          <div className="min-w-0">
+            <div className="truncate font-heading text-base leading-none font-bold tracking-tight uppercase">
+              Optimizer
+            </div>
+            <div className="nb-mono mt-1 truncate text-[11px] text-foreground/65">
+              v0.1.0 · Windows
+            </div>
           </div>
         </div>
       </div>
 
       <nav
         aria-label="Módulos do sistema"
-        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3"
+        className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-3"
       >
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -126,7 +141,7 @@ export const Sidebar = memo(function Sidebar({
               type="button"
               aria-current={isActive ? "page" : undefined}
               onClick={() => onSelectSection(item.id)}
-              className={`flex w-full cursor-pointer items-center justify-between rounded-base border-2 px-3 py-2.5 text-left text-sm font-heading font-bold transition-all ${
+              className={`flex w-full cursor-pointer items-center justify-between rounded-base border-2 px-3 py-2 text-left text-sm font-heading font-bold transition-all ${
                 isActive
                   ? "border-border bg-main text-main-foreground shadow-shadow"
                   : "border-transparent bg-transparent text-foreground hover:border-border hover:bg-background"
@@ -150,7 +165,27 @@ export const Sidebar = memo(function Sidebar({
         })}
       </nav>
 
-      <div className="border-t-2 border-border p-3">
+      <div className="space-y-2 border-t-2 border-border p-3">
+        {onOpenUpdates && (
+          <Button
+            type="button"
+            variant={updateAvailable ? "success" : "neutral"}
+            size="xs"
+            onClick={onOpenUpdates}
+            className="w-full justify-between"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <Sparkles className="size-3.5" aria-hidden="true" />
+              <span>{copy.checkUpdates}</span>
+            </span>
+            {updateAvailable && (
+              <Badge variant="default" className="nb-mono px-1.5 py-0 text-[10px]">
+                NEW
+              </Badge>
+            )}
+          </Button>
+        )}
+
         <div
           className={`rounded-base border-2 border-border p-3 shadow-[3px_3px_0px_0px_var(--border)] ${
             privilege?.isAdmin

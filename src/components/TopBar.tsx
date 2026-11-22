@@ -1,4 +1,12 @@
-import { Languages, Moon, RefreshCw, Sun } from "lucide-react";
+import {
+  Command,
+  FileDown,
+  Languages,
+  Moon,
+  RefreshCw,
+  Sparkles,
+  Sun,
+} from "lucide-react";
 import { UI_COPY } from "../i18n";
 import type { ActiveSection, AppLocale } from "../types/system";
 import { formatTimestamp } from "../utils/format";
@@ -15,6 +23,10 @@ interface TopBarProps {
   onToggleTheme: () => void;
   locale: AppLocale;
   onToggleLocale: () => void;
+  updateAvailable?: boolean;
+  onOpenUpdates?: () => void;
+  onOpenCommandPalette?: () => void;
+  onExportReport?: () => void;
 }
 
 export function TopBar({
@@ -27,6 +39,10 @@ export function TopBar({
   onToggleTheme,
   locale,
   onToggleLocale,
+  updateAvailable = false,
+  onOpenUpdates,
+  onOpenCommandPalette,
+  onExportReport,
 }: TopBarProps) {
   const copy = UI_COPY[locale].topBar;
 
@@ -37,6 +53,10 @@ export function TopBar({
     diagnostics: {
       title: copy.diagnosticsTitle,
       subtitle: copy.diagnosticsSub,
+    },
+    netlab: {
+      title: copy.netlabTitle,
+      subtitle: copy.netlabSub,
     },
     hardware: {
       title: copy.hardwareTitle,
@@ -71,10 +91,54 @@ export function TopBar({
         <p className="truncate text-xs text-foreground/70">{meta.subtitle}</p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2.5">
+      <div className="flex shrink-0 items-center gap-2">
+        {updateAvailable && onOpenUpdates && (
+          <Button
+            type="button"
+            variant="success"
+            size="xs"
+            onClick={onOpenUpdates}
+          >
+            <Sparkles className="size-3.5" aria-hidden="true" />
+            <span>UPDATE</span>
+          </Button>
+        )}
+
+        {onOpenCommandPalette && (
+          <Button
+            type="button"
+            variant="neutral"
+            size="xs"
+            onClick={onOpenCommandPalette}
+            title="Command Palette (Ctrl + K)"
+            className="nb-mono hidden sm:inline-flex"
+          >
+            <Command className="size-3.5" aria-hidden="true" />
+            <span>Ctrl+K</span>
+          </Button>
+        )}
+
+        {onExportReport && (
+          <Button
+            type="button"
+            variant="neutral"
+            size="xs"
+            onClick={onExportReport}
+            title={
+              locale === "pt"
+                ? "Exportar Laudo Técnico (.md)"
+                : "Export Audit Report (.md)"
+            }
+            className="hidden md:inline-flex"
+          >
+            <FileDown className="size-3.5" aria-hidden="true" />
+            <span>{locale === "pt" ? "Laudo" : "Report"}</span>
+          </Button>
+        )}
+
         <Badge
           variant={scanning ? "default" : telemetryConnected ? "safe" : "neutral"}
-          className="nb-mono hidden lg:inline-flex"
+          className="nb-mono hidden xl:inline-flex"
         >
           <span
             className={`size-2 rounded-full border border-border ${
@@ -96,7 +160,7 @@ export function TopBar({
         </Badge>
 
         {scannedAt && (
-          <div className="hidden border-l-2 border-border pl-3 text-right sm:block">
+          <div className="hidden border-l-2 border-border pl-2.5 text-right lg:block">
             <div className="text-[10.5px] font-heading font-bold uppercase text-foreground/65">
               {copy.lastScan}
             </div>

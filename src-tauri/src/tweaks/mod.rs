@@ -29,9 +29,10 @@ use self::services::{
     SERVICE_START_AUTO,
 };
 use self::system_ops::{
-    create_system_restore_point, is_plan_high_performance, query_active_dns_adapters_fast,
-    query_netsh_tcp_global_map, revert_dns_target, revert_power_plan, set_fsutil_behavior,
-    set_hibernation, set_netsh_ip_global, set_netsh_supplemental_provider, set_netsh_tcp_global,
+    create_system_restore_point, delete_qos_policy_subkey, is_plan_high_performance,
+    query_active_dns_adapters_fast, query_netsh_tcp_global_map, revert_dns_target,
+    revert_power_plan, set_fsutil_behavior, set_hibernation, set_interface_mtu,
+    set_netsh_ip_global, set_netsh_supplemental_provider, set_netsh_tcp_global,
     set_power_setting_indices, set_scheduled_task_enabled, ActiveDnsAdapter, SystemSpecs,
 };
 
@@ -835,6 +836,11 @@ fn revert_single_target(target: &BackupTarget) -> AppResult<()> {
             task_path,
             was_enabled,
         } => set_scheduled_task_enabled(task_path, *was_enabled),
+        BackupTarget::NetInterfaceMtu {
+            interface_alias,
+            original_mtu,
+        } => set_interface_mtu(interface_alias, *original_mtu),
+        BackupTarget::QosPolicy { policy_name } => delete_qos_policy_subkey(policy_name),
         BackupTarget::SnapshotNote { .. } => Ok(()),
     }
 }

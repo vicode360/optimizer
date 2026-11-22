@@ -85,6 +85,13 @@ pub enum BackupTarget {
         task_path: String,
         was_enabled: bool,
     },
+    NetInterfaceMtu {
+        interface_alias: String,
+        original_mtu: u32,
+    },
+    QosPolicy {
+        policy_name: String,
+    },
     SnapshotNote {
         description: String,
         original_value: String,

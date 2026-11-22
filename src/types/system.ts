@@ -95,6 +95,15 @@ export type BackupTarget =
       wasEnabled: boolean;
     }
   | {
+      targetType: "netInterfaceMtu";
+      interfaceAlias: string;
+      originalMtu: number;
+    }
+  | {
+      targetType: "qosPolicy";
+      policyName: string;
+    }
+  | {
       targetType: "snapshotNote";
       description: string;
       originalValue: string;
@@ -266,6 +275,89 @@ export interface StartupToggleResult {
   backupSessionId: string | null;
 }
 
+export interface RouteProbeResult {
+  id: string;
+  regionName: string;
+  location: string;
+  targetHost: string;
+  avgMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+  jitterMs: number | null;
+  lossPercent: number;
+}
+
+export interface RouteHop {
+  hop: number;
+  ipAddress: string;
+  rtt1Ms: number | null;
+  rtt2Ms: number | null;
+  rtt3Ms: number | null;
+  avgMs: number | null;
+  stage: "local" | "isp" | "backbone" | "timeout" | string;
+}
+
+export interface RouteTraceReport {
+  targetHost: string;
+  hops: RouteHop[];
+  bottleneckHop: number | null;
+  bottleneckSummary: string;
+}
+
+export interface DnsBenchmarkEntry {
+  providerId: string;
+  providerName: string;
+  primaryIp: string;
+  secondaryIp: string;
+  avgMs: number | null;
+  minMs: number | null;
+  jitterMs: number | null;
+  successRate: number;
+}
+
+export interface MtuDiscoveryResult {
+  interfaceAlias: string;
+  currentMtu: number;
+  optimalMtu: number;
+  maxUnfragmentedPayload: number;
+  isOptimal: boolean;
+  connectionTypeHint: string;
+}
+
+export interface QosGamePolicy {
+  policyName: string;
+  gameName: string;
+  exeName: string;
+  dscpValue: number;
+}
+
+export interface NicDriverProperty {
+  id: string;
+  adapterName: string;
+  subkey: string;
+  valueName: string;
+  displayName: string;
+  currentValue: string;
+  recommendedValue: string;
+  isOptimized: boolean;
+  description: string;
+}
+
+export interface UpdateCheckResult {
+  currentVersion: string;
+  latestVersion: string;
+  releaseTag: string;
+  releaseName: string;
+  updateAvailable: boolean;
+  releaseNotes: string;
+  htmlUrl: string;
+  publishedAt: string;
+  setupExeUrl: string | null;
+  setupExeName: string | null;
+  portableExeUrl: string | null;
+  sha256SumsUrl: string | null;
+}
+
 export interface TelemetryTick {
   timestamp: string;
   cpuUsagePercent: number;
@@ -276,6 +368,7 @@ export interface TelemetryTick {
   networkRxBytesPerSec: number;
   networkTxBytesPerSec: number;
   uptimeSeconds: number;
+  timerResolutionMs?: number;
 }
 
 export type TweakCategory =
@@ -341,6 +434,7 @@ export interface RevertSessionResult {
 
 export type ActiveSection =
   | "diagnostics"
+  | "netlab"
   | "hardware"
   | "telemetry"
   | "startup"

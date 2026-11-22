@@ -2,7 +2,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BenchmarkPanel } from "../components/BenchmarkPanel";
+import { CommandPalette } from "../components/CommandPalette";
+import { NetLabView } from "../components/NetLabView";
 import { StartupView } from "../components/StartupView";
+import { UpdateModal } from "../components/UpdateModal";
 import { localizeDiagnostic, localizeTweak } from "../i18n";
 import { tauriClient } from "../services/tauriClient";
 import type { DiagnosticFinding, TweakItem } from "../types/system";
@@ -17,15 +20,30 @@ vi.mock("../services/tauriClient", () => ({
     runSystemBenchmark: vi.fn(),
     listStartupItems: vi.fn(),
     setStartupItemEnabled: vi.fn(),
+    listQosPolicies: vi.fn(),
+    listNicDriverTweaks: vi.fn(),
+    probeGameRoutes: vi.fn(),
+    traceRouteHops: vi.fn(),
+    runMultiDnsBenchmark: vi.fn(),
+    applyCustomDnsProvider: vi.fn(),
+    discoverOptimalMtu: vi.fn(),
+    applyOptimalMtu: vi.fn(),
+    addQosGamePolicy: vi.fn(),
+    removeQosGamePolicy: vi.fn(),
+    applyNicDriverTweak: vi.fn(),
+    flushNetworkStack: vi.fn(),
+    downloadAndLaunchUpdate: vi.fn(),
   },
 }));
 
 const mockedClient = vi.mocked(tauriClient);
 
-describe("New features: i18n, BenchmarkPanel, and StartupView", () => {
+describe("New features: i18n, BenchmarkPanel, StartupView, NetLabView, UpdateModal & CommandPalette", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
+    mockedClient.listQosPolicies.mockResolvedValue([]);
+    mockedClient.listNicDriverTweaks.mockResolvedValue([]);
   });
 
   it("localizes tweaks and diagnostics between PT-BR and EN-US while preserving IDs", () => {
@@ -131,16 +149,6 @@ describe("New features: i18n, BenchmarkPanel, and StartupView", () => {
         enabled: true,
         requiresAdmin: false,
       },
-      {
-        id: "task::\\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator",
-        name: "CEIP Consolidator",
-        commandOrPath:
-          "\\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator",
-        locationLabel: "Agendador de Tarefas (Windows)",
-        source: "scheduledTask",
-        enabled: true,
-        requiresAdmin: true,
-      },
     ]);
     mockedClient.setStartupItemEnabled.mockResolvedValue({
       id: "hkcu_run::Discord",
@@ -174,5 +182,154 @@ describe("New features: i18n, BenchmarkPanel, and StartupView", () => {
       false
     );
     expect(onMutationComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("operates NetLabView: probes regional game routes, runs Multi-DNS benchmark, discovers optimal MTU, and adds QoS DSCP 46 preset", async () => {
+    const user = userEvent.setup();
+    const onMutationComplete = vi.fn();
+
+    mockedClient.probeGameRoutes.mockResolvedValue([
+      {
+        id: "sa_east_gru",
+        regionName: "South America (Brasil)",
+        location: "São Paulo (GRU / sa-east-1)",
+        targetHost: "ec2.sa-east-1.amazonaws.com",
+        avgMs: 12.4,
+        minMs: 11.8,
+        maxMs: 13.2,
+        jitterMs: 0.6,
+        lossPercent: 0,
+      },
+    ]);
+
+    mockedClient.runMultiDnsBenchmark.mockResolvedValue([
+      {
+        providerId: "cloudflare",
+        providerName: "Cloudflare Anycast",
+        primaryIp: "1.1.1.1",
+        secondaryIp: "1.0.0.1",
+        avgMs: 8.5,
+        minMs: 8.1,
+        jitterMs: 0.4,
+        successRate: 100,
+      },
+    ]);
+
+    mockedClient.discoverOptimalMtu.mockResolvedValue({
+      interfaceAlias: "Ethernet",
+      currentMtu: 1500,
+      optimalMtu: 1492,
+      maxUnfragmentedPayload: 1464,
+      isOptimal: false,
+      connectionTypeHint: "Fibra PPPoE Detectada (1492 bytes)",
+    });
+
+    mockedClient.addQosGamePolicy.mockResolvedValue({
+      policyName: "Optimizer_Counter_Strike_2",
+      gameName: "Counter-Strike 2",
+      exeName: "cs2.exe",
+      dscpValue: 46,
+    });
+
+    render(
+      <NetLabView
+        locale="pt"
+        privilege={{
+          isAdmin: true,
+          elevationLabel: "Administrador",
+          username: "tester",
+        }}
+        elevating={false}
+        onRequestElevation={vi.fn()}
+        onMutationComplete={onMutationComplete}
+      />
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /Sondar Rotas de Jogos/i })
+    );
+    expect(await screen.findByText("12.4 ms")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Testar 6 DNS/i }));
+    expect(await screen.findByText("#1 FASTEST")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /Descobrir MTU Ideal/i })
+    );
+    expect(await screen.findByText("1492")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /Counter-Strike 2/i })
+    );
+    expect(mockedClient.addQosGamePolicy).toHaveBeenCalledWith(
+      "Counter-Strike 2",
+      "cs2.exe"
+    );
+  });
+
+  it("renders UpdateModal and CommandPalette actions cleanly", async () => {
+    const user = userEvent.setup();
+    const onIgnore = vi.fn();
+    const onClose = vi.fn();
+    const onNavigate = vi.fn();
+
+    render(
+      <>
+        <UpdateModal
+          open={true}
+          locale="pt"
+          checking={false}
+          updateInfo={{
+            currentVersion: "0.1.0",
+            latestVersion: "0.2.0",
+            releaseTag: "v0.2.0",
+            releaseName: "Optimizer v0.2.0",
+            updateAvailable: true,
+            releaseNotes: "### Novidades\n- Aba NetLab estilo ExitLag",
+            htmlUrl: "https://github.com/vicode360/optimizer/releases/tag/v0.2.0",
+            publishedAt: "2026-11-22T00:00:00Z",
+            setupExeUrl:
+              "https://github.com/vicode360/optimizer/releases/download/v0.2.0/Optimizer_0.2.0_x64-setup.exe",
+            setupExeName: "Optimizer_0.2.0_x64-setup.exe",
+            portableExeUrl: null,
+            sha256SumsUrl:
+              "https://github.com/vicode360/optimizer/releases/download/v0.2.0/SHA256SUMS.txt",
+          }}
+          checkError={null}
+          onClose={onClose}
+          onRecheck={vi.fn()}
+          onIgnoreVersion={onIgnore}
+        />
+
+        <CommandPalette
+          open={true}
+          locale="pt"
+          theme="light"
+          tweaks={[]}
+          onClose={onClose}
+          onNavigate={onNavigate}
+          onSelectTweak={vi.fn()}
+          onToggleTheme={vi.fn()}
+          onToggleLocale={vi.fn()}
+          onOpenUpdates={vi.fn()}
+          onRunScan={vi.fn()}
+          onExportReport={vi.fn()}
+        />
+      </>
+    );
+
+    expect(
+      screen.getByText(/Nova atualização disponível!/i)
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /Ignorar esta versão/i })
+    );
+    expect(onIgnore).toHaveBeenCalledWith("v0.2.0");
+
+    await user.click(
+      screen.getByRole("button", { name: /Ir para: NetLab \(Ping & QoS\)/i })
+    );
+    expect(onNavigate).toHaveBeenCalledWith("netlab");
   });
 });

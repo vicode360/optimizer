@@ -23,16 +23,25 @@
 ### 1. System Diagnostics, Native Hardware Inventory & Before/After Benchmark
 - Reads CPU, RAM, swap, GPUs (including 64-bit `HardwareInformation.qwMemorySize` VRAM > 4 GiB), disks, network adapters, active power plan, monitors (`EnumDisplaySettingsW`), and input devices (`Win32_PnPEntity`) via `sysinfo`, WMI, and Win32 GDI.
 - **Integrated Before & After Benchmark:** Measures real 1ms kernel timer sleep average/P95/jitter, live DNS resolution latency, available RAM, active power scheme, and TCP stack state before and after applying optimizations.
+- **1-Click Technical Audit Export (`.md`) & Global Command Palette (`Ctrl + K`):** Export a complete hardware, telemetry, and active tweaks audit report in Markdown, or navigate views and trigger actions instantly via `Ctrl + K`.
+- **SHA-256 Verified GitHub Release Auto-Updater:** Checks `vicode360/optimizer` releases on demand or startup, shows an optional Neobrutalist changelog modal, and verifies the installer's SHA-256 hash against `SHA256SUMS.txt` before execution.
 - **Bilingual Interface (`PT-BR` / `EN-US`) & Light/Dark Neobrutalism Themes:** Instant zero-latency language and theme switching in the top bar.
 
-### 2. Real-Time Telemetry (1 Hz)
-- Streams global CPU load, per-logical-core usage, memory utilization, active network RX/TX throughput, and system uptime over Tauri IPC (`telemetry://tick`).
+### 2. Real-Time Telemetry (1 Hz) & Kernel Timer Resolution
+- Streams global CPU load, per-logical-core usage, memory utilization, active network RX/TX throughput, live **Windows Kernel Timer Resolution (`ntdll.dll :: NtQueryTimerResolution`, e.g., `0.50 ms` vs `15.62 ms`)**, and system uptime over Tauri IPC (`telemetry://tick`).
 
-### 3. Startup Programs & Scheduled Tasks Manager
+### 3. NetLab — Ping, Route Inspector, QoS DSCP 46, Auto-MTU, Multi-DNS & NIC Driver Tuning
+- **Regional Game Route Radar & Hop-by-Hop Route Inspector:** Benchmarks real RTT average, minimum, maximum, jitter, and packet loss across 5 regional endpoints (`sa-east-1` São Paulo GRU, `sa-west` Santiago, `us-east-1` Virginia, `us-west-2` Oregon, `eu-central-1` Frankfurt) and traces hop-by-hop routes (`LOCAL`, `ISP`/CGNAT, `BACKBONE`) to pinpoint where latency spikes occur.
+- **Game Packet Prioritizer (QoS DSCP 46 / `Expedited Forwarding`):** Writes native Windows `Pacer.sys` packet scheduler policies (`HKLM\SOFTWARE\Policies\Microsoft\Windows\QoS`) for competitive game executables (CS2, Valorant, League of Legends, Fortnite, Dota 2, Overwatch 2, CoD, EA FC, Rocket League, or any custom `.exe`) with atomic rollback support — works on Windows Home and Pro without `gpedit.msc`.
+- **1-Click Multi-DNS Benchmark (Raw UDP RFC 1035):** Benchmarks Cloudflare, Google, Quad9, OpenDNS, AdGuard, and NextDNS concurrently using raw 32-byte RFC 1035 UDP DNS packets (`std::net::UdpSocket`) bypassing the OS cache, with 1-click apply and DHCP/static DNS backup.
+- **Auto-MTU Finder (Don't Fragment Binary Search):** Discovers the exact Path MTU without IP fragmentation (`ping -f -l`, e.g., `1492` PPPoE vs `1500` Ethernet/Fiber) and applies it to the active interface with atomic rollback.
+- **NIC Hardware Driver Tuner & Net Stack Flush:** Tunes hardware NDIS properties (`*InterruptModeration`, `*FlowControl`, `*EEE`, `*PriorityVLANTag`, `*LsoV2IPv4`, `*LsoV2IPv6`) and flushes DNS/ARP caches on demand.
+
+### 4. Startup Programs & Scheduled Tasks Manager
 - Inspects `HKCU Run`, `HKLM Run`, `HKLM Run32` (toggled non-destructively via Windows `StartupApproved\Run` binary flags without deleting Registry entries), and Windows telemetry/updater Scheduled Tasks (`schtasks`), with automatic atomic backup in `%AppData%\optimizer\backups\`.
 
-### 4. 58 Audited, Reversible System Tweaks
-Organized across 7 modular Rust backend engines (`src-tauri/src/tweaks/`) with instant search, category filters, risk levels (`SAFE`, `MODERATE`, `ADVANCED`), optional **Windows System Restore Point (VSS)** creation, **single-tweak rollback**, and curated presets:
+### 5. 58 Audited, Reversible System Tweaks
+Organized across 7 modular Rust backend engines (`src-tauri/src/tweaks/`) with instant search, category filters, risk levels (`SAFE`, `MODERATE`, `ADVANCED`), **`REBOOT` badges** for kernel/boot-level changes, optional **Windows System Restore Point (VSS)** creation, **single-tweak rollback**, and curated presets:
 
 | Module | Count | Examples |
 | --- | :---: | --- |
@@ -44,8 +53,8 @@ Organized across 7 modular Rust backend engines (`src-tauri/src/tweaks/`) with i
 | **Debloat & Services** (`debloat_services.rs`) | 9 | Telemetry policy/services (`DiagTrack`), Start Menu Bing search, Copilot/Consumer features, Activity History, background UWP apps, SysMain (automatically gated to SSD/NVMe system drives) |
 | **Security Hardening** (`security_hardening.rs`) | 8 | CIS/Microsoft Baseline controls: disable LLMNR, SMBv1, Null Sessions, WDigest cleartext credentials, AutoRun; enforce SMB Signing & DoH Auto; optional VBS/HVCI trade-off |
 
-### 4. Atomic Backup Vault
-- Lists every saved snapshot session in `%AppData%\optimizer\backups\`, inspects exact captured values (`REG_DWORD`, `REG_QWORD`, `REG_SZ`, `REG_EXPAND_SZ`, `REG_BINARY`, `REG_MULTI_SZ`, `Absent`, SCM start types, `powercfg` AC/DC indices, `fsutil`, `netsh`, and IPv4 DNS), and performs 2-step confirmed rollbacks.
+### 6. Atomic Backup Vault
+- Lists every saved snapshot session in `%AppData%\optimizer\backups\`, inspects exact captured values (`REG_DWORD`, `REG_QWORD`, `REG_SZ`, `REG_EXPAND_SZ`, `REG_BINARY`, `REG_MULTI_SZ`, `Absent`, SCM start types, `powercfg` AC/DC indices, `fsutil`, `netsh`, IPv4 DNS, `NetInterfaceMtu`, and `QosPolicy`), and performs 2-step confirmed rollbacks.
 
 ---
 

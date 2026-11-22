@@ -6,14 +6,21 @@ import type {
   BackupSession,
   BackupSessionSummary,
   BenchmarkSnapshot,
+  DnsBenchmarkEntry,
+  MtuDiscoveryResult,
+  NicDriverProperty,
   PrivilegeStatus,
+  QosGamePolicy,
   RevertSessionResult,
+  RouteProbeResult,
+  RouteTraceReport,
   StartupItem,
   StartupToggleResult,
   SystemScanReport,
   TelemetryTick,
   TweakItem,
   TweakProgressEvent,
+  UpdateCheckResult,
 } from "../types/system";
 
 export function isTauriRuntime(): boolean {
@@ -145,6 +152,91 @@ export const tauriClient = {
     return invokeTyped<StartupToggleResult>("set_startup_item_enabled", {
       itemId,
       enabled,
+    });
+  },
+
+  probeGameRoutes(): Promise<RouteProbeResult[]> {
+    return invokeTyped<RouteProbeResult[]>("probe_game_routes");
+  },
+
+  traceRouteHops(targetHost: string): Promise<RouteTraceReport> {
+    return invokeTyped<RouteTraceReport>("trace_route_hops", { targetHost });
+  },
+
+  runMultiDnsBenchmark(): Promise<DnsBenchmarkEntry[]> {
+    return invokeTyped<DnsBenchmarkEntry[]>("run_multi_dns_benchmark");
+  },
+
+  applyCustomDnsProvider(
+    primaryIp: string,
+    secondaryIp: string,
+    providerName: string
+  ): Promise<string> {
+    return invokeTyped<string>("apply_custom_dns_provider", {
+      primaryIp,
+      secondaryIp,
+      providerName,
+    });
+  },
+
+  discoverOptimalMtu(): Promise<MtuDiscoveryResult> {
+    return invokeTyped<MtuDiscoveryResult>("discover_optimal_mtu");
+  },
+
+  applyOptimalMtu(interfaceAlias: string, mtu: number): Promise<string> {
+    return invokeTyped<string>("apply_optimal_mtu", { interfaceAlias, mtu });
+  },
+
+  listQosPolicies(): Promise<QosGamePolicy[]> {
+    return invokeTyped<QosGamePolicy[]>("list_qos_policies");
+  },
+
+  addQosGamePolicy(gameName: string, exeName: string): Promise<QosGamePolicy> {
+    return invokeTyped<QosGamePolicy>("add_qos_game_policy", {
+      gameName,
+      exeName,
+    });
+  },
+
+  removeQosGamePolicy(policyName: string): Promise<void> {
+    return invokeTyped<void>("remove_qos_game_policy", { policyName });
+  },
+
+  listNicDriverTweaks(): Promise<NicDriverProperty[]> {
+    return invokeTyped<NicDriverProperty[]>("list_nic_driver_tweaks");
+  },
+
+  applyNicDriverTweak(
+    subkey: string,
+    valueName: string,
+    desiredValue: string,
+    friendlyName: string
+  ): Promise<string> {
+    return invokeTyped<string>("apply_nic_driver_tweak", {
+      subkey,
+      valueName,
+      desiredValue,
+      friendlyName,
+    });
+  },
+
+  flushNetworkStack(): Promise<string> {
+    return invokeTyped<string>("flush_network_stack");
+  },
+
+  checkGithubUpdates(): Promise<UpdateCheckResult> {
+    return invokeTyped<UpdateCheckResult>("check_github_updates");
+  },
+
+  downloadAndLaunchUpdate(
+    assetUrl: string,
+    sha256SumsUrl: string | null,
+    expectedFilename: string
+  ): Promise<string> {
+    return invokeTyped<string>("download_and_launch_update", {
+      assetUrl,
+      sha256SumsUrl,
+      expectedFilename,
     });
   },
 

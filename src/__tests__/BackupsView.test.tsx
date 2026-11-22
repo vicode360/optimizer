@@ -70,6 +70,15 @@ describe("BackupsView and target descriptions", () => {
         wasEnabled: true,
       },
       {
+        targetType: "netInterfaceMtu",
+        interfaceAlias: "Ethernet",
+        originalMtu: 1500,
+      },
+      {
+        targetType: "qosPolicy",
+        policyName: "Optimizer_Counter_Strike_2",
+      },
+      {
         targetType: "snapshotNote",
         description: "Standby RAM",
         originalValue: "10 GiB",
@@ -81,6 +90,8 @@ describe("BackupsView and target descriptions", () => {
       "netsh int ipv4 global loopbacklargemtu -> original=enable"
     );
     expect(descriptions[10]).toContain("Tarefa Agendada");
+    expect(descriptions[11]).toContain("MTU Ethernet -> original=1500");
+    expect(descriptions[12]).toContain("Política QoS DSCP 46");
     expect(descriptions.every((d) => d.length > 0)).toBe(true);
   });
 
